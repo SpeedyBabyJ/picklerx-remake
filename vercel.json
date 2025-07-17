@@ -12,12 +12,6 @@
         "dest": "/$1"
       }
     ],
-    "cache": {
-      "images": {
-        "maxAge": "31536000",
-        "staleWhileRevalidate": "86400"
-      }
-    },
     "env": {
       "NODE_ENV": "production"
     }

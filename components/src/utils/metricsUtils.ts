@@ -37,7 +37,7 @@ export const calculateMetrics = (frontFrames: PoseFrame[], sideFrames: PoseFrame
   let totalMobility = 0;
   let totalCompensation = 0;
   let totalSymmetry = 0;
-  let compensationCounts: Record<string, number> = {};
+  const compensationCounts: Record<string, number> = {};
 
   const combinedFrames = [...frontFrames, ...sideFrames];
 

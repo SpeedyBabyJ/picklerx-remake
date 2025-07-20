@@ -1,30 +1,29 @@
 'use client';
 
 import React from 'react';
+import OverheadSquatAssessment from '../src/components/OverheadSquatAssessment';
 
 export default function Home() {
   return (
     <main style={{ 
-      padding: 40, 
-      fontSize: 24, 
-      fontFamily: 'system-ui, sans-serif',
-      textAlign: 'center',
+      padding: 20,
       minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
       background: 'linear-gradient(135deg, #0b1c2d 0%, #1e3a8a 100%)',
-      color: 'white'
+      color: 'white',
+      fontFamily: 'system-ui, sans-serif'
     }}>
-      <h1 style={{ fontSize: 48, marginBottom: 20 }}>🏓 PickleRX</h1>
-      <div style={{ fontSize: 32, marginBottom: 10 }}>✅ Live & Ready</div>
-      <div style={{ fontSize: 18, opacity: 0.8, marginTop: 20 }}>
-        Biomechanics Assessment Platform
-      </div>
-      <div style={{ fontSize: 16, opacity: 0.6, marginTop: 10 }}>
-        Real-time pose detection • Professional analysis • Injury prevention
-      </div>
+      <h1 style={{ 
+        fontSize: 48, 
+        textAlign: 'center', 
+        marginBottom: 20,
+        background: 'linear-gradient(45deg, #60a5fa, #a78bfa)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text'
+      }}>
+        🏓 PickleRX
+      </h1>
+      <OverheadSquatAssessment onAssessmentComplete={(result) => console.log(result)} />
     </main>
   );
 } 

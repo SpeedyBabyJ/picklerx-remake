@@ -7,6 +7,8 @@ const nextConfig = {
     };
     return config;
   },
+  // Ensure proper static generation
+  output: 'standalone',
 };
 
 module.exports = nextConfig; 

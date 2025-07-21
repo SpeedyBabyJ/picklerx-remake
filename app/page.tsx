@@ -1,12 +1,13 @@
-export const dynamic = "force-dynamic";
 'use client';
 import React from 'react';
-import OverheadSquatAssessment from '../src/components/OverheadSquatAssessment';
+import ClientOnlyAssessment from '../src/components/ClientOnlyAssessment';
+
+export const dynamic = 'force-dynamic';
 
 export default function Home() {
   return (
     <main>
-      <OverheadSquatAssessment onAssessmentComplete={() => {}} />
+      <ClientOnlyAssessment />
     </main>
   );
 } 

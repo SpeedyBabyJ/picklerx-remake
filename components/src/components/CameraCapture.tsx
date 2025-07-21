@@ -44,13 +44,19 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ assessmentPhase, onCaptur
   useEffect(() => {
     const init = async () => {
       try {
+        console.log('🔧 Initializing TensorFlow.js backend...');
         await tf.setBackend('webgl');
+        console.log('✅ TensorFlow.js backend initialized');
+        
+        console.log('🔧 Loading MoveNet model...');
         const model = await posedetection.createDetector(
           posedetection.SupportedModels.MoveNet,
           { modelType: posedetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
         );
+        console.log('✅ MoveNet model loaded');
         setDetector(model);
 
+        console.log('🔧 Requesting camera permissions...');
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
             width: 640, 
@@ -58,15 +64,19 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ assessmentPhase, onCaptur
             facingMode: 'user'
           } 
         });
+        console.log('✅ Camera permissions granted');
+        
         const video = videoRef.current;
         if (video) {
           video.srcObject = stream;
+          console.log('✅ Video stream connected');
         }
         
         // Initialize Kalman filters
         initializeFilters();
+        console.log('✅ Kalman filters initialized');
       } catch (error) {
-        console.error('Camera initialization error:', error);
+        console.error('❌ Camera initialization error:', error);
       }
     };
     init();
@@ -153,9 +163,6 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ assessmentPhase, onCaptur
 
   useEffect(() => {
     if (!detector || !canvasRef.current) return;
-    const ctx = canvasRef.current.getContext('2d');
-    if (!ctx) return;
-
     const render = async () => {
       if (videoRef.current && videoRef.current.readyState === 4) {
         try {
@@ -187,9 +194,13 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ assessmentPhase, onCaptur
 
             // Draw overlay every frame for smooth visualization
             if (canvasRef.current) {
-              ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-              drawKeypoints(smoothed, ctx);
-              drawSkeleton(smoothed, ctx);
+              const ctx = canvasRef.current.getContext('2d');
+              if (ctx) {
+                ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                drawKeypoints(smoothed, ctx);
+                drawSkeleton(smoothed, ctx);
+                console.log('🎨 Drawing skeleton overlay with', smoothed.length, 'keypoints');
+              }
             }
 
             // Only sample frames during critical phases and recording phases
@@ -199,10 +210,14 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ assessmentPhase, onCaptur
             if (isRecording && isCriticalPhase && poseHistory.length > 10) {
               onCaptureFrame(smoothed);
             }
+          } else {
+            console.log('⚠️ No poses detected in frame');
           }
         } catch (error) {
-          console.error('Pose detection error:', error);
+          console.error('❌ Pose detection error:', error);
         }
+      } else {
+        console.log('⚠️ Video not ready, readyState:', videoRef.current?.readyState);
       }
       requestAnimationFrame(render);
     };

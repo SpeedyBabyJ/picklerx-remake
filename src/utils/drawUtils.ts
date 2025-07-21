@@ -1,7 +1,5 @@
-import * as posedetection from '@tensorflow-models/pose-detection';
-
-export const drawKeypoints = (keypoints: posedetection.Keypoint[], ctx: CanvasRenderingContext2D) => {
-  keypoints.forEach((point: posedetection.Keypoint) => {
+export const drawKeypoints = (keypoints: any[], ctx: CanvasRenderingContext2D) => {
+  keypoints.forEach((point: any) => {
     if ((point.score ?? 0) > 0.3) {
       ctx.beginPath();
       ctx.arc(point.x, point.y, 6, 0, 2 * Math.PI);
@@ -13,7 +11,7 @@ export const drawKeypoints = (keypoints: posedetection.Keypoint[], ctx: CanvasRe
   });
 };
 
-export const drawSkeleton = (keypoints: posedetection.Keypoint[], ctx: CanvasRenderingContext2D) => {
+export const drawSkeleton = (keypoints: any[], ctx: CanvasRenderingContext2D) => {
   const adjacentKeyPoints = [
     [0, 1], [1, 3], [0, 2], [2, 4], [5, 7], [7, 9], [6, 8], [8, 10],
     [5, 6], [5, 11], [6, 12], [11, 12], [11, 13], [13, 15], [12, 14], [14, 16]
@@ -36,9 +34,9 @@ export const drawSkeleton = (keypoints: posedetection.Keypoint[], ctx: CanvasRen
 };
 
 // Dummy implementations for required exports (replace with real logic as needed)
-export const drawPose = (_ctx: CanvasRenderingContext2D, _pose: posedetection.Pose, _canvasWidth: number, _canvasHeight: number) => {};
-export const drawAngles = (_ctx: CanvasRenderingContext2D, _pose: posedetection.Pose, _canvasWidth: number, _canvasHeight: number) => {};
-export const calculateJointAngles = (_pose: posedetection.Pose) => ({
+export const drawPose = (_ctx: CanvasRenderingContext2D, _pose: any, _canvasWidth: number, _canvasHeight: number) => {};
+export const drawAngles = (_ctx: CanvasRenderingContext2D, _pose: any, _canvasWidth: number, _canvasHeight: number) => {};
+export const calculateJointAngles = (_pose: any) => ({
   ankleFlexion: 0,
   kneeFlexion: 0,
   hipFlexion: 0,

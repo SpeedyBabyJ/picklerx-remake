@@ -24,13 +24,7 @@ const OverheadSquatAssessment: React.FC<OverheadSquatAssessmentProps> = ({
   const [results, setResults] = useState<MetricsOutput | null>(null);
   const [poseDetection, setPoseDetection] = useState<any>(null);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      import('@tensorflow-models/pose-detection').then((mod) => {
-        setPoseDetection(mod);
-      });
-    }
-  }, []);
+  // Remove any import or dynamic import of '@tensorflow-models/pose-detection'
 
   const handleCaptureFrame = useCallback((keypoints: any[], phase: 'descent' | 'bottom' | 'ascent', view: 'front' | 'side') => {
     // Ensure all keypoints have required fields for PoseFrame
@@ -116,6 +110,8 @@ const OverheadSquatAssessment: React.FC<OverheadSquatAssessmentProps> = ({
       }
     }
   }, [squatCount, currentPhase, currentView]);
+
+  // Remove any import or dynamic import of '@tensorflow-models/pose-detection'
 
   if (!poseDetection) return <div>Loading Pose Detection...</div>;
 

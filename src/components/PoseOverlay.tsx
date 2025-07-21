@@ -1,11 +1,10 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import * as poseDetection from '@tensorflow-models/pose-detection';
 import { drawPose, drawAngles } from '../utils/drawUtils';
 
 interface PoseOverlayProps {
-  poses: poseDetection.Pose[];
+  poses: any[]; // Changed from poseDetection.Pose[]
   videoElement: HTMLVideoElement | null;
   showSkeleton: boolean;
   showAngles: boolean;
@@ -53,11 +52,11 @@ const PoseOverlay: React.FC<PoseOverlayProps> = ({
 
   const drawLandmarks = (
     ctx: CanvasRenderingContext2D,
-    pose: poseDetection.Pose,
+    pose: any, // Changed from poseDetection.Pose
     canvasWidth: number,
     canvasHeight: number
   ) => {
-    pose.keypoints.forEach((keypoint) => {
+    pose.keypoints.forEach((keypoint: any) => { // Changed from poseDetection.Pose
       if (keypoint.score && keypoint.score > 0.3) {
         const x = keypoint.x * canvasWidth;
         const y = keypoint.y * canvasHeight;

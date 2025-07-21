@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import * as posedetection from '@tensorflow-models/pose-detection';
 import CameraCapture from './CameraCapture';
 import { calculateMetrics } from '../utils/metricsUtils';
 import type { MetricsOutput } from '../utils/metricsUtils';
@@ -23,8 +22,17 @@ const OverheadSquatAssessment: React.FC<OverheadSquatAssessmentProps> = ({
   const [squatCount, setSquatCount] = useState(0);
   const [currentView, setCurrentView] = useState<'front' | 'side'>('front');
   const [results, setResults] = useState<MetricsOutput | null>(null);
+  const [poseDetection, setPoseDetection] = useState<any>(null);
 
-  const handleCaptureFrame = useCallback((keypoints: posedetection.Keypoint[], phase: 'descent' | 'bottom' | 'ascent', view: 'front' | 'side') => {
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      import('@tensorflow-models/pose-detection').then((mod) => {
+        setPoseDetection(mod);
+      });
+    }
+  }, []);
+
+  const handleCaptureFrame = useCallback((keypoints: any[], phase: 'descent' | 'bottom' | 'ascent', view: 'front' | 'side') => {
     // Ensure all keypoints have required fields for PoseFrame
     const poseFrame = keypoints.map(kp => ({
       x: kp.x ?? 0,
@@ -108,6 +116,8 @@ const OverheadSquatAssessment: React.FC<OverheadSquatAssessmentProps> = ({
       }
     }
   }, [squatCount, currentPhase, currentView]);
+
+  if (!poseDetection) return <div>Loading Pose Detection...</div>;
 
   const getPhaseColor = (phase: AssessmentPhase) => {
     switch (phase) {

@@ -2,68 +2,139 @@
 
 import React from 'react';
 
-interface ResultsScreenProps {
-  results: {
-    mobility: number;
-    symmetry: number;
-    compensation: number;
-    injuryRisk: number | null;
-    tier: "Elite" | "Pro" | "Amateur" | "Incomplete";
-    flags: string[];
-  };
-  onRetake: () => void;
-}
+const LOGO_URL = '/file.svg'; // Update if needed
+const BRAND_GREEN = '#8CD211';
+const BRAND_DARK = '#0B1C2D';
+const BRAND_YELLOW = '#FFD600';
+const BRAND_BLUE = '#00B2FF';
+const BRAND_RED = '#FF3B30';
+const BRAND_FONT = 'system-ui, sans-serif';
+
+const TIER_COLORS: Record<string, string> = {
+  Elite: BRAND_GREEN,
+  Pro: BRAND_BLUE,
+  Amateur: BRAND_YELLOW,
+  Novice: BRAND_RED,
+};
 
 const RISK_LIBRARY: Record<string, string> = {
-  "Knee Valgus": "Work on hip external rotator strength and knee tracking.",
-  "Trunk Lean": "Focus on ankle mobility and core stability.",
-  "Heel Lift": "Improve ankle dorsiflexion with calf stretches.",
-  "Asymmetry": "Perform unilateral strengthening exercises.",
-  "Arms Drop": "Incorporate thoracic mobility and lat stretches."
+  'Knee Valgus': 'Work on hip external rotator strength and knee tracking.',
+  'Trunk Lean': 'Focus on ankle mobility and core stability.',
+  'Heel Lift': 'Improve ankle dorsiflexion with calf stretches.',
+  'Asymmetry': 'Perform unilateral strengthening exercises.',
+  'Arms Drop': 'Incorporate thoracic mobility and lat stretches.',
 };
 
-const getTierColor = (tier: string) => {
-  switch (tier) {
-    case "Elite": return "text-green-500";
-    case "Pro": return "text-blue-500";
-    case "Amateur": return "text-yellow-400";
-    default: return "text-white";
-  }
+const EXERCISES: Record<string, { strengthen: string[]; foam: string[]; stretch: string[] }> = {
+  'Knee Valgus': {
+    strengthen: ['Clamshells', 'Monster Walks', 'Single-leg Glute Bridge'],
+    foam: ['IT Band Roll', 'Quad Roll'],
+    stretch: ['Hip Flexor Stretch', 'Figure-4 Stretch'],
+  },
+  'Trunk Lean': {
+    strengthen: ['Dead Bug', 'Bird Dog', 'Plank'],
+    foam: ['Thoracic Roll', 'Lat Roll'],
+    stretch: ['Cat-Cow', 'Child’s Pose'],
+  },
+  'Heel Lift': {
+    strengthen: ['Calf Raises', 'Tibialis Raises', 'Single-leg Balance'],
+    foam: ['Calf Roll', 'Plantar Fascia Roll'],
+    stretch: ['Standing Calf Stretch', 'Downward Dog'],
+  },
+  'Asymmetry': {
+    strengthen: ['Single-leg Squat', 'Step-ups', 'Lateral Band Walk'],
+    foam: ['Glute Roll', 'Hamstring Roll'],
+    stretch: ['Hamstring Stretch', 'Adductor Stretch'],
+  },
+  'Arms Drop': {
+    strengthen: ['Wall Angels', 'Face Pulls', 'Y-T-W Raises'],
+    foam: ['Lat Roll', 'Upper Back Roll'],
+    stretch: ['Doorway Stretch', 'Child’s Pose'],
+  },
 };
 
-const getMetricColor = (score: number) => {
-  if (score >= 85) return "text-green-500";
-  if (score >= 70) return "text-blue-500";
-  if (score >= 50) return "text-yellow-400";
-  return "text-red-500";
-};
+function getTierColor(tier: string) {
+  return TIER_COLORS[tier] || 'white';
+}
 
-const ResultsScreen: React.FC<ResultsScreenProps> = ({ results, onRetake }) => {
+function getMetricColor(score: number) {
+  if (score >= 85) return BRAND_GREEN;
+  if (score >= 70) return BRAND_BLUE;
+  if (score >= 50) return BRAND_YELLOW;
+  return BRAND_RED;
+}
+
+function getBodyMapRiskCircles(flags: string[]) {
+  // Map risk flags to body map joint positions and colors
+  // Example: left_shoulder, right_shoulder, left_knee, right_knee, left_ankle, right_ankle
+  const jointMap: Record<string, { x: number; y: number; color: string }> = {
+    'Knee Valgus': { x: 45, y: 170, color: BRAND_RED },
+    'Trunk Lean': { x: 60, y: 70, color: BRAND_YELLOW },
+    'Heel Lift': { x: 45, y: 220, color: BRAND_YELLOW },
+    'Asymmetry': { x: 75, y: 120, color: BRAND_YELLOW },
+    'Arms Drop': { x: 30, y: 70, color: BRAND_YELLOW },
+  };
+  return flags.map((flag, idx) => {
+    const joint = jointMap[flag];
+    if (!joint) return null;
+    return <circle key={flag} cx={joint.x} cy={joint.y} r="12" fill={joint.color} stroke="#fff" strokeWidth="3" />;
+  });
+}
+
+function getAllExercises(flags: string[]) {
+  const strengthen = new Set<string>();
+  const foam = new Set<string>();
+  const stretch = new Set<string>();
+  flags.forEach(flag => {
+    const ex = EXERCISES[flag];
+    if (ex) {
+      ex.strengthen.forEach(s => strengthen.add(s));
+      ex.foam.forEach(f => foam.add(f));
+      ex.stretch.forEach(st => stretch.add(st));
+    }
+  });
+  return {
+    strengthen: Array.from(strengthen),
+    foam: Array.from(foam),
+    stretch: Array.from(stretch),
+  };
+}
+
+export default function ResultsScreen({ results, onRetake }: any) {
+  const exercises = getAllExercises(results.flags);
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-[#0b1c2d] text-white font-sans p-6">
-      {/* Header */}
-      <h1 className="text-4xl font-bold uppercase tracking-wide mb-2">Movement Assessment</h1>
-      <div className={`text-3xl font-bold uppercase mb-6 ${getTierColor(results.tier)}`}>{results.tier}</div>
-
-      {/* Metrics */}
-      <div className="grid grid-cols-3 gap-8 text-center mb-8">
-        <div>
-          <div className={`text-5xl font-bold ${getMetricColor(results.mobility)}`}>{results.mobility}</div>
-          <div className="mt-2 text-lg uppercase tracking-wide">Mobility</div>
+    <div style={{ minHeight: '100vh', background: BRAND_DARK, color: 'white', fontFamily: BRAND_FONT, padding: 0, margin: 0 }}>
+      {/* Logo */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0 8px 0' }}>
+        <img src={LOGO_URL} alt="PickleRX Logo" style={{ height: 56, marginRight: 18 }} />
+        <span style={{ color: 'white', fontWeight: 800, fontSize: 40, letterSpacing: 2 }}>PickleRX</span>
+      </div>
+      {/* Title */}
+      <div style={{ textAlign: 'center', fontSize: 32, fontWeight: 700, marginBottom: 8, letterSpacing: 1 }}>Movement Assessment</div>
+      {/* Performance Tier */}
+      <div style={{ textAlign: 'center', fontSize: 28, fontWeight: 700, color: getTierColor(results.tier), marginBottom: 24 }}>{results.tier}</div>
+      {/* Scores */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 32, marginBottom: 32 }}>
+        <div style={{ background: '#16213A', borderRadius: 16, padding: '24px 32px', textAlign: 'center', minWidth: 120 }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Mobility</div>
+          <div style={{ fontSize: 40, fontWeight: 900, color: getMetricColor(results.mobility) }}>{results.mobility}</div>
         </div>
-        <div>
-          <div className={`text-5xl font-bold ${getMetricColor(results.symmetry)}`}>{results.symmetry}</div>
-          <div className="mt-2 text-lg uppercase tracking-wide">Symmetry</div>
+        <div style={{ background: '#16213A', borderRadius: 16, padding: '24px 32px', textAlign: 'center', minWidth: 120 }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Symmetry</div>
+          <div style={{ fontSize: 40, fontWeight: 900, color: getMetricColor(results.symmetry) }}>{results.symmetry}</div>
         </div>
-        <div>
-          <div className={`text-5xl font-bold ${getMetricColor(results.compensation)}`}>{results.compensation}</div>
-          <div className="mt-2 text-lg uppercase tracking-wide">Compensation</div>
+        <div style={{ background: '#16213A', borderRadius: 16, padding: '24px 32px', textAlign: 'center', minWidth: 120 }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Activation</div>
+          <div style={{ fontSize: 40, fontWeight: 900, color: getMetricColor(results.compensation) }}>{results.compensation}</div>
+        </div>
+        <div style={{ background: '#16213A', borderRadius: 16, padding: '24px 32px', textAlign: 'center', minWidth: 120 }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 8 }}>Injury Risk</div>
+          <div style={{ fontSize: 40, fontWeight: 900, color: getMetricColor(results.injuryRisk ?? 0) }}>{results.injuryRisk ?? 0}</div>
         </div>
       </div>
-
-      {/* SVG Human Figure with Color-coded Joints */}
-      <div className="mb-8">
-        <svg width="120" height="260" viewBox="0 0 120 260">
+      {/* Body Map */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
+        <svg width="180" height="340" viewBox="0 0 120 260">
           {/* Head */}
           <circle cx="60" cy="30" r="18" fill="#1e293b" stroke="#fff" strokeWidth="2" />
           {/* Shoulders */}
@@ -83,20 +154,23 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({ results, onRetake }) => {
           <line x1="30" y1="70" x2="90" y2="70" stroke="#fff" strokeWidth="4" /> {/* Shoulders */}
           <line x1="45" y1="120" x2="45" y2="220" stroke="#fff" strokeWidth="4" /> {/* Left leg */}
           <line x1="75" y1="120" x2="75" y2="220" stroke="#fff" strokeWidth="4" /> {/* Right leg */}
+          {/* Risk Circles */}
+          {getBodyMapRiskCircles(results.flags)}
         </svg>
-        <div className="flex justify-center space-x-4 mt-2 text-sm">
-          <div className="flex items-center"><span className="inline-block w-4 h-4 rounded-full bg-green-500 mr-1"></span>Elite</div>
-          <div className="flex items-center"><span className="inline-block w-4 h-4 rounded-full bg-blue-500 mr-1"></span>Pro</div>
-          <div className="flex items-center"><span className="inline-block w-4 h-4 rounded-full bg-yellow-400 mr-1"></span>Amateur</div>
-        </div>
       </div>
-
-      {/* Squat Analysis */}
-      <div className="w-full max-w-xl mt-2">
-        <h2 className="text-2xl font-semibold mb-4 uppercase tracking-wide">Squat Analysis</h2>
-        <ul className="list-disc list-inside space-y-2 text-lg">
+      {/* Legend */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginBottom: 24, fontSize: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}><span style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 9, background: BRAND_GREEN, marginRight: 8 }}></span>Elite</div>
+        <div style={{ display: 'flex', alignItems: 'center' }}><span style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 9, background: BRAND_BLUE, marginRight: 8 }}></span>Pro</div>
+        <div style={{ display: 'flex', alignItems: 'center' }}><span style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 9, background: BRAND_YELLOW, marginRight: 8 }}></span>Amateur</div>
+        <div style={{ display: 'flex', alignItems: 'center' }}><span style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 9, background: BRAND_RED, marginRight: 8 }}></span>Novice</div>
+      </div>
+      {/* Analysis */}
+      <div style={{ maxWidth: 600, margin: '0 auto 24px auto', background: '#16213A', borderRadius: 16, padding: 24 }}>
+        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 12, color: BRAND_GREEN }}>Front View Analysis</div>
+        <ul style={{ fontSize: 18, marginBottom: 0, color: 'white', paddingLeft: 24 }}>
           {results.flags.length > 0 ? (
-            results.flags.map((flag, idx) => (
+            results.flags.map((flag: string, idx: number) => (
               <li key={idx}>{flag}</li>
             ))
           ) : (
@@ -104,25 +178,16 @@ const ResultsScreen: React.FC<ResultsScreenProps> = ({ results, onRetake }) => {
           )}
         </ul>
       </div>
-
-      {/* Corrective Exercises */}
-      <div className="w-full max-w-xl mt-4">
-        <h2 className="text-xl font-semibold mb-2">Recommended Corrective Exercises</h2>
-        <p className="text-base text-white/90">
-          {results.flags.length > 0 ?
-            results.flags.map(flag => RISK_LIBRARY[flag] || null).filter(Boolean).join(" ")
-            : "Maintain your current training, your squat looks solid!"
-          }
-        </p>
+      {/* Exercise Recommendations */}
+      <div style={{ maxWidth: 600, margin: '0 auto 24px auto', background: '#16213A', borderRadius: 16, padding: 24 }}>
+        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 12, color: BRAND_GREEN }}>Recommended Exercises</div>
+        <div style={{ fontSize: 18, marginBottom: 8, color: 'white' }}><b>Strengthening:</b> {exercises.strengthen.join(', ') || 'Maintain your current training, your squat looks solid!'}</div>
+        <div style={{ fontSize: 18, marginBottom: 8, color: 'white' }}><b>Foam Rolling:</b> {exercises.foam.join(', ') || '-'}</div>
+        <div style={{ fontSize: 18, color: 'white' }}><b>Stretching:</b> {exercises.stretch.join(', ') || '-'}</div>
       </div>
-
-      <button
-        onClick={onRetake}
-        className="mt-8 px-6 py-3 bg-green-600 rounded-xl text-xl font-semibold hover:bg-green-700 transition">
-        Retake Assessment
-      </button>
+      <div style={{ textAlign: 'center', margin: '32px 0' }}>
+        <button onClick={onRetake} style={{ background: BRAND_GREEN, color: BRAND_DARK, fontWeight: 700, fontSize: 22, padding: '16px 48px', border: 'none', borderRadius: 16, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)', letterSpacing: 1 }}>Retake Assessment</button>
+      </div>
     </div>
   );
-};
-
-export default ResultsScreen; 
+} 

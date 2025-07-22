@@ -138,7 +138,7 @@ export default function ClientOnlyAssessment() {
   // UI rendering
   return (
     <div style={{ position: 'relative', width: 640, height: 540, background: BRAND_DARK, fontFamily: BRAND_FONT, borderRadius: 20, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', margin: '40px auto', overflow: 'hidden' }}>
-      {/* Logo and header */}
+      {/* Logo and header (always visible) */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 0 8px 0', background: 'transparent' }}>
         <img src={LOGO_URL} alt="PickleRX Logo" style={{ height: 48, marginRight: 16 }} />
         <span style={{ color: 'white', fontWeight: 700, fontSize: 32, letterSpacing: 2 }}>PickleRX Assessment</span>

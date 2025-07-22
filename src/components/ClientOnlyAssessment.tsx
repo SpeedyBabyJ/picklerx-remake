@@ -15,7 +15,7 @@ const PHASES = {
   RESULTS: 'results',
 };
 
-const LOGO_URL = '/file.svg'; // Update this if your logo is in a different path
+const LOGO_URL = '/picklerx-logo.jpg'; // Updated path for PickleRX logo
 const BRAND_GREEN = '#8CD211';
 const BRAND_DARK = '#0B1C2D';
 const BRAND_FONT = 'system-ui, sans-serif';
@@ -125,6 +125,21 @@ export default function ClientOnlyAssessment() {
     detect();
     return () => cancelAnimationFrame(requestRef.current!);
   }, [detector, phase]);
+
+  // Camera initialization: request camera when assessment starts
+  useEffect(() => {
+    if (phase !== PHASES.IDLE && videoRef.current) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then((stream) => {
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+        })
+        .catch((err) => {
+          console.error('Camera error:', err);
+        });
+    }
+  }, [phase]);
 
   // Reset for retake
   const handleRetake = () => {

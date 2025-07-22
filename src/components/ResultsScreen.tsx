@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-const LOGO_URL = '/file.svg'; // Update if needed
+const LOGO_URL = '/picklerx-logo.jpg'; // Updated path for PickleRX logo
 const BRAND_GREEN = '#8CD211';
 const BRAND_DARK = '#0B1C2D';
 const BRAND_YELLOW = '#FFD600';

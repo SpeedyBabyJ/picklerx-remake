@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 
-const LOGO_URL = '/file.svg'; // Update if needed
+const LOGO_URL = '/picklerx-logo.jpg';
 const BRAND_GREEN = '#8CD211';
 const BRAND_DARK = '#0B1C2D';
 const BRAND_FONT = 'system-ui, sans-serif';

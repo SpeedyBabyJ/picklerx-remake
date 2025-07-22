@@ -15,10 +15,12 @@ const PHASES = {
   RESULTS: 'results',
 };
 
-const LOGO_URL = '/picklerx-logo.jpg'; // Updated path for PickleRX logo
+const LOGO_URL = '/picklerx-logo.jpg';
 const BRAND_GREEN = '#8CD211';
 const BRAND_DARK = '#0B1C2D';
 const BRAND_FONT = 'system-ui, sans-serif';
+const VIDEO_WIDTH = 640;
+const VIDEO_HEIGHT = 480;
 
 export default function ClientOnlyAssessment() {
   const [poseDetection, setPoseDetection] = useState<any>(null);
@@ -35,19 +37,6 @@ export default function ClientOnlyAssessment() {
   const [squatCount, setSquatCount] = useState(0);
   const SQUAT_TARGET = 3;
 
-  // Load pose detection
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      import('@tensorflow-models/pose-detection').then(async (mod) => {
-        setPoseDetection(mod);
-        const detector = await mod.createDetector(mod.SupportedModels.MoveNet, {
-          modelType: mod.movenet.modelType.SINGLEPOSE_LIGHTNING,
-        });
-        setDetector(detector);
-      });
-    }
-  }, []);
-
   // Camera initialization: request camera when assessment starts
   useEffect(() => {
     if (phase !== PHASES.IDLE && videoRef.current) {
@@ -62,6 +51,23 @@ export default function ClientOnlyAssessment() {
         });
     }
   }, [phase]);
+
+  // Set cameraReady only after video is actually playing
+  const handleCameraReady = () => {
+    setCameraReady(true);
+  };
+
+  // Load pose detection model after camera is ready
+  useEffect(() => {
+    if (!cameraReady) return;
+    import('@tensorflow-models/pose-detection').then(async (mod) => {
+      setPoseDetection(mod);
+      const detector = await mod.createDetector(mod.SupportedModels.MoveNet, {
+        modelType: mod.movenet.modelType.SINGLEPOSE_LIGHTNING,
+      });
+      setDetector(detector);
+    });
+  }, [cameraReady]);
 
   // Countdown logic
   useEffect(() => {
@@ -92,24 +98,26 @@ export default function ClientOnlyAssessment() {
       if (videoRef.current && videoRef.current.readyState >= 2) {
         const poses = await detector.estimatePoses(videoRef.current);
         if (poses && poses[0] && poses[0].keypoints) {
-          setKeypoints(poses[0].keypoints);
+          // Log keypoints for debugging
+          console.log('Pose keypoints:', poses[0].keypoints);
+          // If keypoints are normalized (0-1), scale to video size
+          const scaledKeypoints = poses[0].keypoints.map((kp: any) => ({
+            x: kp.x > 1.5 ? kp.x : kp.x * VIDEO_WIDTH, // Heuristic: if x > 1.5, assume already in pixels
+            y: kp.y > 1.5 ? kp.y : kp.y * VIDEO_HEIGHT,
+            score: kp.score,
+            name: kp.name,
+          }));
+          setKeypoints(scaledKeypoints);
           // Only record during recording phases
           if (phase === PHASES.RECORD_FRONT || phase === PHASES.RECORD_SIDE) {
-            // Save frame
-            const frame = poses[0].keypoints.map((kp: any) => ({
-              x: kp.x,
-              y: kp.y,
-              score: kp.score,
-              name: kp.name,
-            }));
-            if (phase === PHASES.RECORD_FRONT) setFrontFrames((prev) => [...prev, frame]);
-            if (phase === PHASES.RECORD_SIDE) setSideFrames((prev) => [...prev, frame]);
+            if (phase === PHASES.RECORD_FRONT) setFrontFrames((prev) => [...prev, scaledKeypoints]);
+            if (phase === PHASES.RECORD_SIDE) setSideFrames((prev) => [...prev, scaledKeypoints]);
 
             // Squat detection (simple: knee y below hip y)
-            const leftKnee = poses[0].keypoints.find((kp: any) => kp.name === 'left_knee');
-            const rightKnee = poses[0].keypoints.find((kp: any) => kp.name === 'right_knee');
-            const leftHip = poses[0].keypoints.find((kp: any) => kp.name === 'left_hip');
-            const rightHip = poses[0].keypoints.find((kp: any) => kp.name === 'right_hip');
+            const leftKnee = scaledKeypoints.find((kp: any) => kp.name === 'left_knee');
+            const rightKnee = scaledKeypoints.find((kp: any) => kp.name === 'right_knee');
+            const leftHip = scaledKeypoints.find((kp: any) => kp.name === 'left_hip');
+            const rightHip = scaledKeypoints.find((kp: any) => kp.name === 'right_hip');
             const knees = [leftKnee, rightKnee].filter(Boolean);
             const hips = [leftHip, rightHip].filter(Boolean);
             if (knees.length && hips.length) {
@@ -183,13 +191,13 @@ export default function ClientOnlyAssessment() {
               autoPlay
               playsInline
               muted
-              width={640}
-              height={480}
+              width={VIDEO_WIDTH}
+              height={VIDEO_HEIGHT}
               onLoadedMetadata={() => {
                 videoRef.current?.play();
               }}
-              onCanPlay={() => setCameraReady(true)}
-              style={{ position: 'absolute', top: 0, left: 0, width: 640, height: 480, transform: 'scaleX(-1)', zIndex: 1, borderRadius: 20, boxShadow: '0 2px 8px #000' }}
+              onCanPlay={handleCameraReady}
+              style={{ position: 'absolute', top: 0, left: 0, width: VIDEO_WIDTH, height: VIDEO_HEIGHT, transform: 'scaleX(-1)', zIndex: 1, borderRadius: 20, boxShadow: '0 2px 8px #000' }}
             />
             <PoseOverlay keypoints={keypoints} />
             {(phase === PHASES.RECORD_FRONT || phase === PHASES.RECORD_SIDE) && (

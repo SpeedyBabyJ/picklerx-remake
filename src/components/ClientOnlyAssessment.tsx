@@ -29,6 +29,7 @@ export default function ClientOnlyAssessment() {
   const [frontFrames, setFrontFrames] = useState<any[]>([]);
   const [sideFrames, setSideFrames] = useState<any[]>([]);
   const [results, setResults] = useState<any>(null);
+  const [cameraReady, setCameraReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const requestRef = useRef<number>();
   const [squatCount, setSquatCount] = useState(0);
@@ -46,6 +47,21 @@ export default function ClientOnlyAssessment() {
       });
     }
   }, []);
+
+  // Camera initialization: request camera when assessment starts
+  useEffect(() => {
+    if (phase !== PHASES.IDLE && videoRef.current) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then((stream) => {
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+        })
+        .catch((err) => {
+          console.error('Camera error:', err);
+        });
+    }
+  }, [phase]);
 
   // Countdown logic
   useEffect(() => {
@@ -65,9 +81,9 @@ export default function ClientOnlyAssessment() {
     }
   }, [phase]);
 
-  // Pose detection and frame capture
+  // Pose detection and frame capture (only when cameraReady and detector are true)
   useEffect(() => {
-    if (!detector || !videoRef.current) return;
+    if (!detector || !cameraReady || phase === PHASES.IDLE) return;
     let lastSquatPhase = 'standing';
     let squatCounter = 0;
     let squatStartTime: number | null = null;
@@ -124,22 +140,7 @@ export default function ClientOnlyAssessment() {
     };
     detect();
     return () => cancelAnimationFrame(requestRef.current!);
-  }, [detector, phase]);
-
-  // Camera initialization: request camera when assessment starts
-  useEffect(() => {
-    if (phase !== PHASES.IDLE && videoRef.current) {
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then((stream) => {
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-          }
-        })
-        .catch((err) => {
-          console.error('Camera error:', err);
-        });
-    }
-  }, [phase]);
+  }, [detector, cameraReady, phase]);
 
   // Reset for retake
   const handleRetake = () => {
@@ -148,6 +149,7 @@ export default function ClientOnlyAssessment() {
     setSideFrames([]);
     setResults(null);
     setSquatCount(0);
+    setCameraReady(false);
   };
 
   // UI rendering
@@ -186,6 +188,7 @@ export default function ClientOnlyAssessment() {
               onLoadedMetadata={() => {
                 videoRef.current?.play();
               }}
+              onCanPlay={() => setCameraReady(true)}
               style={{ position: 'absolute', top: 0, left: 0, width: 640, height: 480, transform: 'scaleX(-1)', zIndex: 1, borderRadius: 20, boxShadow: '0 2px 8px #000' }}
             />
             <PoseOverlay keypoints={keypoints} />

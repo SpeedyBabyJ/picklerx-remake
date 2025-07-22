@@ -14,7 +14,10 @@ const SKELETON_CONNECTIONS = [
   ["left_hip", "left_knee"],
   ["left_knee", "left_ankle"],
   ["right_hip", "right_knee"],
-  ["right_knee", "right_ankle"]
+  ["right_knee", "right_ankle"],
+  // Extra pairs for clarity
+  ["left_ankle", "left_knee"],
+  ["right_ankle", "right_knee"],
 ];
 
 interface Keypoint {
@@ -31,6 +34,17 @@ interface PoseOverlayProps {
 export default function PoseOverlay({ keypoints }: PoseOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Helper to scale keypoints if normalized
+  const scaleKeypoints = (kp: Keypoint, canvas: HTMLCanvasElement) => {
+    if (kp.x <= 1 && kp.y <= 1) {
+      return {
+        x: kp.x * canvas.width,
+        y: kp.y * canvas.height,
+      };
+    }
+    return { x: kp.x, y: kp.y };
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !keypoints) return;
@@ -44,10 +58,12 @@ export default function PoseOverlay({ keypoints }: PoseOverlayProps) {
       const kp1 = keypoints.find(k => k.name === p1);
       const kp2 = keypoints.find(k => k.name === p2);
       if (kp1 && kp2 && kp1.score > 0.4 && kp2.score > 0.4) {
+        const pt1 = scaleKeypoints(kp1, canvas);
+        const pt2 = scaleKeypoints(kp2, canvas);
         ctx.beginPath();
-        ctx.moveTo(kp1.x, kp1.y);
-        ctx.lineTo(kp2.x, kp2.y);
-        ctx.strokeStyle = 'rgba(0,255,0,0.6)';
+        ctx.moveTo(pt1.x, pt1.y);
+        ctx.lineTo(pt2.x, pt2.y);
+        ctx.strokeStyle = 'lime';
         ctx.lineWidth = 2;
         ctx.stroke();
       }
@@ -56,8 +72,9 @@ export default function PoseOverlay({ keypoints }: PoseOverlayProps) {
     // Draw keypoints
     keypoints.forEach((kp) => {
       if (kp.score > 0.4) {
+        const { x, y } = scaleKeypoints(kp, canvas);
         ctx.beginPath();
-        ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
+        ctx.arc(x, y, 5, 0, 2 * Math.PI);
         ctx.fillStyle = 'lime';
         ctx.fill();
       }
@@ -69,7 +86,13 @@ export default function PoseOverlay({ keypoints }: PoseOverlayProps) {
       ref={canvasRef}
       width={640}
       height={480}
-      style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 2, transform: 'scaleX(-1)' }}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        zIndex: 2,
+        pointerEvents: 'none',
+      }}
     />
   );
 } 

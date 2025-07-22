@@ -44,6 +44,9 @@ export default function ClientOnlyAssessment() {
         .then((stream) => {
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
+            videoRef.current.play().then(() => {
+              console.log("🎥 Camera initialized:", videoRef.current?.srcObject);
+            });
           }
         })
         .catch((err) => {
@@ -66,6 +69,7 @@ export default function ClientOnlyAssessment() {
         modelType: mod.movenet.modelType.SINGLEPOSE_LIGHTNING,
       });
       setDetector(detector);
+      console.log("🧠 Pose detector initialized:", detector);
     });
   }, [cameraReady]);
 
@@ -95,14 +99,18 @@ export default function ClientOnlyAssessment() {
     let squatStartTime: number | null = null;
 
     const detect = async () => {
-      if (videoRef.current && videoRef.current.readyState >= 2) {
+      if (
+        videoRef.current &&
+        videoRef.current.readyState === 4 &&
+        detector &&
+        cameraReady
+      ) {
         const poses = await detector.estimatePoses(videoRef.current);
-        if (poses && poses[0] && poses[0].keypoints) {
-          // Log keypoints for debugging
-          console.log('Pose keypoints:', poses[0].keypoints);
+        if (poses.length > 0 && poses[0].keypoints) {
+          console.log("🧍‍♂️ Pose keypoints:", poses[0].keypoints);
           // If keypoints are normalized (0-1), scale to video size
           const scaledKeypoints = poses[0].keypoints.map((kp: any) => ({
-            x: kp.x > 1.5 ? kp.x : kp.x * VIDEO_WIDTH, // Heuristic: if x > 1.5, assume already in pixels
+            x: kp.x > 1.5 ? kp.x : kp.x * VIDEO_WIDTH,
             y: kp.y > 1.5 ? kp.y : kp.y * VIDEO_HEIGHT,
             score: kp.score,
             name: kp.name,

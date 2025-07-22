@@ -15,6 +15,11 @@ const PHASES = {
   RESULTS: 'results',
 };
 
+const LOGO_URL = '/file.svg'; // Update this if your logo is in a different path
+const BRAND_GREEN = '#8CD211';
+const BRAND_DARK = '#0B1C2D';
+const BRAND_FONT = 'system-ui, sans-serif';
+
 export default function ClientOnlyAssessment() {
   const [poseDetection, setPoseDetection] = useState<any>(null);
   const [detector, setDetector] = useState<any>(null);
@@ -132,48 +137,54 @@ export default function ClientOnlyAssessment() {
 
   // UI rendering
   return (
-    <div style={{ position: 'relative', width: 640, height: 480 }}>
-      {phase === PHASES.IDLE && (
-        <button onClick={() => setPhase(PHASES.COUNTDOWN_FRONT)} style={{ position: 'absolute', zIndex: 2, left: 0, top: 0 }}>
-          Start Assessment
-        </button>
-      )}
-      {(phase === PHASES.COUNTDOWN_FRONT || phase === PHASES.COUNTDOWN_SIDE) && (
-        <div style={{ position: 'absolute', zIndex: 2, left: 0, top: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.7)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48 }}>
-          {countdown}
-        </div>
-      )}
-      {phase === PHASES.TURN && (
-        <div style={{ position: 'absolute', zIndex: 2, left: 0, top: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.7)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, flexDirection: 'column' }}>
-          <div>Turn to your right for the side view</div>
-          <button onClick={() => setPhase(PHASES.COUNTDOWN_SIDE)} style={{ marginTop: 24, fontSize: 24 }}>Ready</button>
-        </div>
-      )}
-      {phase !== PHASES.RESULTS && (
-        <>
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            width={640}
-            height={480}
-            onLoadedMetadata={() => {
-              videoRef.current?.play();
-            }}
-            style={{ position: 'absolute', top: 0, left: 0, width: 640, height: 480, transform: 'scaleX(-1)', zIndex: 1 }}
-          />
-          <PoseOverlay keypoints={keypoints} />
-          {(phase === PHASES.RECORD_FRONT || phase === PHASES.RECORD_SIDE) && (
-            <div style={{ position: 'absolute', zIndex: 2, right: 16, top: 16, background: 'rgba(0,0,0,0.6)', color: 'white', padding: 12, borderRadius: 8, fontSize: 20 }}>
-              {phase === PHASES.RECORD_FRONT ? `Front View: Squats ${squatCount}/${SQUAT_TARGET}` : `Side View: Squats ${squatCount}/${SQUAT_TARGET}`}
-            </div>
-          )}
-        </>
-      )}
-      {phase === PHASES.RESULTS && results && (
-        <ResultsScreen results={results} onRetake={handleRetake} />
-      )}
+    <div style={{ position: 'relative', width: 640, height: 540, background: BRAND_DARK, fontFamily: BRAND_FONT, borderRadius: 20, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', margin: '40px auto', overflow: 'hidden' }}>
+      {/* Logo and header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 0 8px 0', background: 'transparent' }}>
+        <img src={LOGO_URL} alt="PickleRX Logo" style={{ height: 48, marginRight: 16 }} />
+        <span style={{ color: 'white', fontWeight: 700, fontSize: 32, letterSpacing: 2 }}>PickleRX Assessment</span>
+      </div>
+      {/* Main content */}
+      <div style={{ position: 'relative', width: 640, height: 480 }}>
+        {phase === PHASES.IDLE && (
+          <button onClick={() => setPhase(PHASES.COUNTDOWN_FRONT)} style={{ position: 'absolute', zIndex: 2, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', background: BRAND_GREEN, color: BRAND_DARK, fontWeight: 700, fontSize: 28, padding: '18px 48px', border: 'none', borderRadius: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', cursor: 'pointer', letterSpacing: 1 }}>Start Assessment</button>
+        )}
+        {(phase === PHASES.COUNTDOWN_FRONT || phase === PHASES.COUNTDOWN_SIDE) && (
+          <div style={{ position: 'absolute', zIndex: 2, left: 0, top: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: BRAND_GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 96, fontWeight: 800, letterSpacing: 2, borderRadius: 20, textShadow: '0 2px 8px #000' }}>
+            {countdown}
+          </div>
+        )}
+        {phase === PHASES.TURN && (
+          <div style={{ position: 'absolute', zIndex: 2, left: 0, top: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, flexDirection: 'column', borderRadius: 20, textAlign: 'center' }}>
+            <div style={{ fontWeight: 700, fontSize: 36, marginBottom: 16, color: BRAND_GREEN }}>Turn to your right for the side view</div>
+            <button onClick={() => setPhase(PHASES.COUNTDOWN_SIDE)} style={{ marginTop: 24, fontSize: 24, background: BRAND_GREEN, color: BRAND_DARK, fontWeight: 700, padding: '12px 36px', border: 'none', borderRadius: 12, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>Ready</button>
+          </div>
+        )}
+        {phase !== PHASES.RESULTS && (
+          <>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              width={640}
+              height={480}
+              onLoadedMetadata={() => {
+                videoRef.current?.play();
+              }}
+              style={{ position: 'absolute', top: 0, left: 0, width: 640, height: 480, transform: 'scaleX(-1)', zIndex: 1, borderRadius: 20, boxShadow: '0 2px 8px #000' }}
+            />
+            <PoseOverlay keypoints={keypoints} />
+            {(phase === PHASES.RECORD_FRONT || phase === PHASES.RECORD_SIDE) && (
+              <div style={{ position: 'absolute', zIndex: 2, right: 24, top: 24, background: 'rgba(12,20,40,0.85)', color: BRAND_GREEN, padding: '16px 32px', borderRadius: 12, fontSize: 24, fontWeight: 700, letterSpacing: 1, boxShadow: '0 2px 8px #000' }}>
+                {phase === PHASES.RECORD_FRONT ? `Front View: Squats ${squatCount}/${SQUAT_TARGET}` : `Side View: Squats ${squatCount}/${SQUAT_TARGET}`}
+              </div>
+            )}
+          </>
+        )}
+        {phase === PHASES.RESULTS && results && (
+          <ResultsScreen results={results} onRetake={handleRetake} />
+        )}
+      </div>
     </div>
   );
 } 

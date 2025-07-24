@@ -1,7 +1,8 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import PoseOverlay from './PoseOverlay';
 import { safeImportTensorFlow } from '../utils/tensorflow-safe';
 import { Keypoint } from '../types';
+import KalmanFilter from '../utils/KalmanFilter';
 
 type AssessmentPhase = 'idle' | 'countdown' | 'recordFront' | 'pause' | 'recordSide' | 'computing' | 'complete';
 
@@ -12,16 +13,7 @@ interface CameraCaptureProps {
   onCaptureFrame: (keypoints: any) => void;
 }
 
-const getAngle = (a: Keypoint, b: Keypoint, c: Keypoint) => {
-  // Calculate angle at joint B using 3 points
-  const ab = { x: a.x - b.x, y: a.y - b.y };
-  const cb = { x: c.x - b.x, y: c.y - b.y };
-  const dot = ab.x * cb.x + ab.y * cb.y;
-  const magAB = Math.sqrt(ab.x * ab.x + ab.y * ab.y);
-  const magCB = Math.sqrt(cb.x * cb.x + cb.y * cb.y);
-  let angle = Math.acos(dot / (magAB * magCB));
-  return (angle * 180) / Math.PI;
-};
+const DETECTION_INTERVAL = 1000 / 12; // 12 FPS
 
 const CameraCapture: React.FC<CameraCaptureProps> = ({ 
   onPoseDetected, 
@@ -34,20 +26,15 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
   const [cameraReady, setCameraReady] = useState(false);
   const [poses, setPoses] = useState<any[]>([]);
   const [isClient, setIsClient] = useState(false);
-  const frameCountRef = useRef(0);
-  const repInProgress = useRef(false);
-  const startHoldTime = useRef<number | null>(null);
-  const squatCount = useRef(0);
+  const repCount = useRef(0);
+  const inBottomPosition = useRef(false);
+  const lastDetectionTime = useRef(0);
+  const kalmanFilters = useRef<{ [name: string]: KalmanFilter }>({});
 
   // Ensure client-side only
   useEffect(() => {
     setIsClient(true);
   }, []);
-
-  // Log assessment phase for debugging
-  useEffect(() => {
-    console.log("🌀 Phase:", assessmentPhase);
-  }, [assessmentPhase]);
 
   // Initialize TensorFlow.js and camera
   useEffect(() => {
@@ -80,10 +67,34 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
     loadDetector();
   }, [isClient]);
 
-  // Continuous pose detection loop with rep detection
+  // Rep detection and pose loop
   useEffect(() => {
     let rafId: number;
-    const poseEstimationLoop = async () => {
+    let canvas: HTMLCanvasElement | null = null;
+    let ctx: CanvasRenderingContext2D | null = null;
+    let REP_THRESHOLD_BOTTOM = 0;
+    let REP_THRESHOLD_TOP = 0;
+
+    const getAverageHipY = (keypoints: Keypoint[]) => {
+      const leftHip = keypoints.find(kp => kp.name === 'left_hip')?.y ?? 0;
+      const rightHip = keypoints.find(kp => kp.name === 'right_hip')?.y ?? 0;
+      return (leftHip + rightHip) / 2;
+    };
+
+    const applyKalmanFilter = (keypoints: Keypoint[]): Keypoint[] => {
+      return keypoints.map(kp => {
+        if (!kalmanFilters.current[kp.name]) {
+          kalmanFilters.current[kp.name] = new KalmanFilter();
+        }
+        return {
+          ...kp,
+          x: kalmanFilters.current[kp.name].filter(kp.x),
+          y: kalmanFilters.current[kp.name].filter(kp.y),
+        };
+      });
+    };
+
+    const detectPose = async () => {
       try {
         if (
           videoRef.current &&
@@ -92,60 +103,59 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
           cameraReady &&
           isClient
         ) {
-          frameCountRef.current++;
-          const processFrame = frameCountRef.current % 3 === 0; // Process every 3rd frame
-          const poses = await detector.estimatePoses(videoRef.current);
+          // Sync canvas to video size
+          if (!canvas) {
+            canvas = document.createElement('canvas');
+            ctx = canvas.getContext('2d');
+          }
+          const video = videoRef.current;
+          video.width = video.videoWidth;
+          video.height = video.videoHeight;
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          REP_THRESHOLD_BOTTOM = canvas.height * 0.7;
+          REP_THRESHOLD_TOP = canvas.height * 0.4;
+
+          const now = Date.now();
+          if (now - lastDetectionTime.current < DETECTION_INTERVAL) {
+            rafId = requestAnimationFrame(detectPose);
+            return;
+          }
+          lastDetectionTime.current = now;
+
+          const poses = await detector.estimatePoses(video);
           if (poses.length > 0 && poses[0].keypoints) {
-            const keypoints: Keypoint[] = poses[0].keypoints;
-            setPoses(poses);
-            onPoseDetected?.(poses[0]);
+            let keypoints: Keypoint[] = poses[0].keypoints;
+            keypoints = applyKalmanFilter(keypoints);
+            setPoses([{ ...poses[0], keypoints }]);
+            onPoseDetected?.({ ...poses[0], keypoints });
             onCaptureFrame(keypoints);
 
-            // Rep detection logic
-            const findKeypoint = (name: string) => keypoints.find((kp: Keypoint) => kp.name === name);
-            const leftAnkle = findKeypoint('left_ankle');
-            const leftKnee = findKeypoint('left_knee');
-            const leftHip = findKeypoint('left_hip');
-            const confidences = [leftAnkle, leftKnee, leftHip].map(kp => kp?.score ?? 0);
-            const minConfidence = Math.min(...confidences);
-            let kneeAngle = 180;
-            if (leftAnkle && leftKnee && leftHip) {
-              kneeAngle = getAngle(leftHip, leftKnee, leftAnkle);
-            }
+            // Rep detection
+            const hipY = getAverageHipY(keypoints);
+            const leftHip = keypoints.find(kp => kp.name === 'left_hip');
+            const rightHip = keypoints.find(kp => kp.name === 'right_hip');
+            const minConfidence = Math.min(leftHip?.score ?? 0, rightHip?.score ?? 0);
 
-            // Only process rep logic every 3rd frame
-            if (processFrame && leftAnkle && leftKnee && leftHip && minConfidence > 0.4) {
-              // Rep start: knee angle below 75°
-              if (!repInProgress.current && kneeAngle <= 75) {
-                startHoldTime.current = Date.now();
-                repInProgress.current = true;
-                console.log('⬇️ Rep started, holding at bottom...');
-              }
-              // Rep hold: knee angle stays below 75°
-              if (repInProgress.current && kneeAngle <= 75) {
-                if (startHoldTime.current && Date.now() - startHoldTime.current >= 300) {
-                  squatCount.current += 1;
-                  repInProgress.current = false;
-                  startHoldTime.current = null;
-                  onSquatComplete();
-                  console.log('✔️ Rep Counted:', squatCount.current);
-                }
-              }
-              // Rep reset: knee angle rises above 120°
-              if (kneeAngle > 120) {
-                repInProgress.current = false;
-                startHoldTime.current = null;
-              }
+            if (!inBottomPosition.current && hipY > REP_THRESHOLD_BOTTOM && minConfidence > 0.4) {
+              inBottomPosition.current = true;
             }
-
+            if (inBottomPosition.current && hipY < REP_THRESHOLD_TOP && minConfidence > 0.4) {
+              repCount.current++;
+              inBottomPosition.current = false;
+              console.log(`✅ Rep ${repCount.current}`);
+              onSquatComplete();
+            }
             // Logging
-            if (frameCountRef.current % 15 === 0) {
+            if (repCount.current % 1 === 0) {
               console.log({
-                frame: frameCountRef.current,
-                kneeAngle: kneeAngle.toFixed(1),
-                repInProgress: repInProgress.current,
+                hipY: hipY.toFixed(1),
+                inBottomPosition: inBottomPosition.current,
+                repCount: repCount.current,
                 minConfidence: minConfidence.toFixed(2),
-                squatCount: squatCount.current
+                canvasH: canvas.height,
+                bottom: REP_THRESHOLD_BOTTOM,
+                top: REP_THRESHOLD_TOP
               });
             }
           }
@@ -153,10 +163,10 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
       } catch (error) {
         console.error('❌ Pose detection error:', error);
       }
-      rafId = requestAnimationFrame(poseEstimationLoop);
+      rafId = requestAnimationFrame(detectPose);
     };
     if (detector && cameraReady && isClient) {
-      poseEstimationLoop();
+      detectPose();
     }
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
@@ -168,15 +178,16 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
   }
 
   return (
-    <div style={{ position: 'relative', width: 640, height: 480 }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <video 
         ref={videoRef} 
-        width={640} 
-        height={480} 
         style={{ 
           position: 'absolute', 
           top: 0, 
           left: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
           transform: 'scaleX(-1)'
         }} 
       />
@@ -192,7 +203,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
         fontSize: '12px',
         fontFamily: 'monospace'
       }}>
-        <div>Reps: {squatCount.current}</div>
+        <div>Reps: {repCount.current}</div>
       </div>
     </div>
   );

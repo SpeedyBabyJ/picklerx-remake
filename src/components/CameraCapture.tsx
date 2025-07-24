@@ -4,9 +4,11 @@ import * as posedetection from '@tensorflow-models/pose-detection';
 import '@tensorflow/tfjs-backend-webgl';
 import PoseOverlay from './PoseOverlay';
 
+type AssessmentPhase = 'idle' | 'countdown' | 'recordFront' | 'pause' | 'recordSide' | 'computing' | 'complete';
+
 interface CameraCaptureProps {
   onPoseDetected?: (pose: any) => void;
-  assessmentPhase: string;
+  assessmentPhase: AssessmentPhase;
   onSquatComplete: () => void;
   onCaptureFrame: (keypoints: any) => void;
 }

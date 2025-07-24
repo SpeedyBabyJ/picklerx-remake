@@ -9,12 +9,12 @@ import { calculateMetrics } from '../utils/metricsUtils';
 const PHASES = {
   IDLE: 'idle',
   COUNTDOWN: 'countdown',
-  RECORD: 'record',
-  TURN: 'turn',
-  SIDE_COUNTDOWN: 'side_countdown',
-  SIDE_RECORD: 'side_record',
-  RESULTS: 'results',
-};
+  RECORD_FRONT: 'recordFront',
+  PAUSE: 'pause',
+  RECORD_SIDE: 'recordSide',
+  COMPUTING: 'computing',
+  COMPLETE: 'complete',
+} as const;
 
 const LOGO_URL = '/picklerx-logo.jpg';
 const BRAND_GREEN = '#8CD211';
@@ -24,7 +24,7 @@ const VIDEO_WIDTH = 640;
 const VIDEO_HEIGHT = 480;
 
 export default function ClientOnlyAssessment() {
-  const [phase, setPhase] = useState(PHASES.IDLE);
+  const [phase, setPhase] = useState<'idle' | 'countdown' | 'recordFront' | 'pause' | 'recordSide' | 'computing' | 'complete'>(PHASES.IDLE);
   const [countdown, setCountdown] = useState(3);
   const [recordingStarted, setRecordingStarted] = useState(false);
   const [keypoints, setKeypoints] = useState<any[]>([]);
@@ -54,22 +54,16 @@ export default function ClientOnlyAssessment() {
     }
   }, [phase]);
 
-  // Debug logs for readiness
-  useEffect(() => {
-    console.log('🎥 video loaded?', videoRef.current?.readyState);
-    console.log('🔁 Detection Started:', recordingStarted);
-  }, [videoRef.current, recordingStarted]);
-
   // Countdown logic
   useEffect(() => {
-    if (phase === PHASES.COUNTDOWN || phase === PHASES.SIDE_COUNTDOWN) {
+    if (phase === PHASES.COUNTDOWN) {
       setCountdown(3);
       const timer = setInterval(() => {
         setCountdown((c) => {
           if (c <= 1) {
             clearInterval(timer);
             setRecordingStarted(true);
-            setPhase(phase === PHASES.COUNTDOWN ? PHASES.RECORD : PHASES.SIDE_RECORD);
+            setPhase(PHASES.RECORD_FRONT);
             console.log('🟢 Recording started');
             return 3;
           }
@@ -79,6 +73,12 @@ export default function ClientOnlyAssessment() {
       return () => clearInterval(timer);
     }
   }, [phase]);
+
+  // Debug logs for readiness
+  useEffect(() => {
+    console.log('🎥 video loaded?', videoRef.current?.readyState);
+    console.log('🔁 Detection Started:', recordingStarted);
+  }, [videoRef.current, recordingStarted]);
 
   // Reset for retake
   const handleRetake = () => {
@@ -103,24 +103,24 @@ export default function ClientOnlyAssessment() {
         {phase === PHASES.IDLE && (
           <button onClick={() => setPhase(PHASES.COUNTDOWN)} style={{ position: 'absolute', zIndex: 2, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', background: BRAND_GREEN, color: BRAND_DARK, fontWeight: 700, fontSize: 28, padding: '18px 48px', border: 'none', borderRadius: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', cursor: 'pointer', letterSpacing: 1 }}>Start Assessment</button>
         )}
-        {(phase === PHASES.COUNTDOWN || phase === PHASES.SIDE_COUNTDOWN) && (
+        {phase === PHASES.COUNTDOWN && (
           <div style={{ position: 'absolute', zIndex: 2, left: 0, top: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: BRAND_GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 96, fontWeight: 800, letterSpacing: 2, borderRadius: 20, textShadow: '0 2px 8px #000' }}>
             {countdown}
           </div>
         )}
-        {phase === PHASES.TURN && (
+        {phase === PHASES.PAUSE && (
           <div style={{ position: 'absolute', zIndex: 2, left: 0, top: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, flexDirection: 'column', borderRadius: 20, textAlign: 'center' }}>
             <div style={{ fontWeight: 700, fontSize: 36, marginBottom: 16, color: BRAND_GREEN }}>Turn to your right for the side view</div>
-            <button onClick={() => setPhase(PHASES.SIDE_COUNTDOWN)} style={{ marginTop: 24, fontSize: 24, background: BRAND_GREEN, color: BRAND_DARK, fontWeight: 700, padding: '12px 36px', border: 'none', borderRadius: 12, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>Ready</button>
+            <button onClick={() => setPhase(PHASES.COUNTDOWN)} style={{ marginTop: 24, fontSize: 24, background: BRAND_GREEN, color: BRAND_DARK, fontWeight: 700, padding: '12px 36px', border: 'none', borderRadius: 12, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>Ready</button>
           </div>
         )}
-        {phase === PHASES.RECORD && recordingStarted && (
+        {phase === PHASES.RECORD_FRONT && recordingStarted && (
           <>
             <CameraCapture
               assessmentPhase={phase}
               onSquatComplete={() => {
                 if (squatCount >= SQUAT_TARGET) {
-                  setPhase(PHASES.TURN);
+                  setPhase(PHASES.PAUSE);
                 }
               }}
               onCaptureFrame={(keypoints) => {
@@ -136,7 +136,7 @@ export default function ClientOnlyAssessment() {
             </div>
           </>
         )}
-        {phase === PHASES.SIDE_RECORD && recordingStarted && (
+        {phase === PHASES.RECORD_SIDE && recordingStarted && (
           <>
             <CameraCapture
               assessmentPhase={phase}
@@ -145,7 +145,7 @@ export default function ClientOnlyAssessment() {
                   // Calculate results
                   const metrics = calculateMetrics(frontFrames, sideFrames);
                   setResults(metrics);
-                  setPhase(PHASES.RESULTS);
+                  setPhase(PHASES.COMPLETE);
                 }
               }}
               onCaptureFrame={(keypoints) => {
@@ -161,7 +161,7 @@ export default function ClientOnlyAssessment() {
             </div>
           </>
         )}
-        {phase === PHASES.RESULTS && results && (
+        {phase === PHASES.COMPLETE && results && (
           <ResultsScreen results={results} onRetake={handleRetake} />
         )}
       </div>

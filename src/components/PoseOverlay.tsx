@@ -20,14 +20,14 @@ const SKELETON_CONNECTIONS = [
 
 interface PoseOverlayProps {
   keypoints: Keypoint[];
+  videoRef?: React.RefObject<HTMLVideoElement>;
 }
 
-export default function PoseOverlay({ keypoints }: PoseOverlayProps) {
+export default function PoseOverlay({ keypoints, videoRef }: PoseOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Helper to scale keypoints if normalized
   const scaleKeypoints = (kp: Keypoint, canvas: HTMLCanvasElement) => {
-    // Check if coordinates are normalized (0-1) or pixel coordinates
     if (kp.x <= 1 && kp.y <= 1) {
       return {
         x: kp.x * canvas.width,
@@ -37,35 +37,43 @@ export default function PoseOverlay({ keypoints }: PoseOverlayProps) {
     return { x: kp.x, y: kp.y };
   };
 
+  // Sync canvas size to video and mirror overlay
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const video = videoRef?.current;
+    if (!canvas || !video) return;
+    const setCanvasSize = () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    };
+    setCanvasSize();
+    video.addEventListener('loadedmetadata', setCanvasSize);
+    return () => video.removeEventListener('loadedmetadata', setCanvasSize);
+  }, [videoRef]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !keypoints || keypoints.length === 0) return;
-    
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Mirror overlay to match webcam
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.translate(-canvas.width, 0);
 
     // Filter keypoints with good confidence
     const validKeypoints = keypoints.filter(kp => kp.score > 0.4);
-    
-    if (validKeypoints.length === 0) {
-      console.log('⚠️ No keypoints with confidence > 0.4');
-      return;
-    }
-
-    console.log(`🎯 Drawing ${validKeypoints.length} keypoints with confidence > 0.4`);
+    if (validKeypoints.length === 0) return;
 
     // Draw skeleton lines
     SKELETON_CONNECTIONS.forEach(([p1, p2]) => {
       const kp1 = validKeypoints.find((k: Keypoint) => k.name === p1);
       const kp2 = validKeypoints.find((k: Keypoint) => k.name === p2);
-      
       if (kp1 && kp2 && kp1.score > 0.4 && kp2.score > 0.4) {
         const pt1 = scaleKeypoints(kp1, canvas);
         const pt2 = scaleKeypoints(kp2, canvas);
-        
         ctx.beginPath();
         ctx.moveTo(pt1.x, pt1.y);
         ctx.lineTo(pt2.x, pt2.y);
@@ -79,30 +87,24 @@ export default function PoseOverlay({ keypoints }: PoseOverlayProps) {
     validKeypoints.forEach((kp) => {
       if (kp.score > 0.4) {
         const { x, y } = scaleKeypoints(kp, canvas);
-        
-        // Draw keypoint circle
         ctx.beginPath();
         ctx.arc(x, y, 6, 0, 2 * Math.PI);
         ctx.fillStyle = 'lime';
         ctx.fill();
-        
-        // Draw confidence indicator
         const confidence = Math.round(kp.score * 100);
         ctx.fillStyle = 'white';
         ctx.font = '10px monospace';
         ctx.fillText(`${confidence}%`, x + 8, y - 8);
       }
     });
-
-    // Log drawing stats
-    console.log(`✅ Drew ${validKeypoints.length} keypoints and skeleton connections`);
-  }, [keypoints]);
+    ctx.restore();
+  }, [keypoints, videoRef]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={640}
-      height={480}
+      width={videoRef?.current?.videoWidth || 640}
+      height={videoRef?.current?.videoHeight || 480}
       style={{
         position: 'absolute',
         top: 0,

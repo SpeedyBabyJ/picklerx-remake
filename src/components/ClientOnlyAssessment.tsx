@@ -24,6 +24,7 @@ const VIDEO_WIDTH = 640;
 const VIDEO_HEIGHT = 480;
 
 export default function ClientOnlyAssessment() {
+  const [isClient, setIsClient] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'countdown' | 'recordFront' | 'pause' | 'recordSide' | 'computing' | 'complete'>(PHASES.IDLE);
   const [countdown, setCountdown] = useState(3);
   const [recordingStarted, setRecordingStarted] = useState(false);
@@ -35,6 +36,11 @@ export default function ClientOnlyAssessment() {
   const [frontFrames, setFrontFrames] = useState<any[]>([]);
   const [sideFrames, setSideFrames] = useState<any[]>([]);
   const SQUAT_TARGET = 3;
+
+  // Ensure component only runs on client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Camera initialization: request camera when assessment starts
   useEffect(() => {
@@ -53,6 +59,12 @@ export default function ClientOnlyAssessment() {
         });
     }
   }, [phase]);
+
+  // Debug logs for readiness
+  useEffect(() => {
+    console.log('🎥 video loaded?', videoRef.current?.readyState);
+    console.log('🔁 Detection Started:', recordingStarted);
+  }, [videoRef.current, recordingStarted]);
 
   // Countdown logic
   useEffect(() => {
@@ -74,12 +86,6 @@ export default function ClientOnlyAssessment() {
     }
   }, [phase]);
 
-  // Debug logs for readiness
-  useEffect(() => {
-    console.log('🎥 video loaded?', videoRef.current?.readyState);
-    console.log('🔁 Detection Started:', recordingStarted);
-  }, [videoRef.current, recordingStarted]);
-
   // Reset for retake
   const handleRetake = () => {
     setPhase(PHASES.IDLE);
@@ -89,6 +95,11 @@ export default function ClientOnlyAssessment() {
     setSquatCount(0);
     setRecordingStarted(false);
   };
+
+  // Don't render anything until client-side
+  if (!isClient) {
+    return <div>Loading...</div>;
+  }
 
   // UI rendering
   return (

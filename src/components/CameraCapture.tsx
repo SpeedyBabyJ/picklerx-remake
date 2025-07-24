@@ -1,7 +1,4 @@
 import React, { useRef, useEffect, useState } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import * as posedetection from '@tensorflow-models/pose-detection';
-import '@tensorflow/tfjs-backend-webgl';
 import PoseOverlay from './PoseOverlay';
 
 type AssessmentPhase = 'idle' | 'countdown' | 'recordFront' | 'pause' | 'recordSide' | 'computing' | 'complete';
@@ -20,7 +17,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
   onCaptureFrame 
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [detector, setDetector] = useState<posedetection.PoseDetector | null>(null);
+  const [detector, setDetector] = useState<any>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [poses, setPoses] = useState<any[]>([]);
 
@@ -31,21 +28,33 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
 
   useEffect(() => {
     const init = async () => {
-      await tf.ready();
-      const model = posedetection.SupportedModels.MoveNet;
-      const detectorConfig = { modelType: posedetection.movenet.modelType.SINGLEPOSE_LIGHTNING };
-      const newDetector = await posedetection.createDetector(model, detectorConfig);
-      setDetector(newDetector);
-      console.log('✅ Pose detector loaded');
+      try {
+        // Only initialize TensorFlow.js in browser environment
+        if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+          // Dynamic imports to prevent SSR issues
+          const tf = await import('@tensorflow/tfjs');
+          const posedetection = await import('@tensorflow-models/pose-detection');
+          await import('@tensorflow/tfjs-backend-webgl');
+          
+          await tf.ready();
+          const model = posedetection.SupportedModels.MoveNet;
+          const detectorConfig = { modelType: posedetection.movenet.modelType.SINGLEPOSE_LIGHTNING };
+          const newDetector = await posedetection.createDetector(model, detectorConfig);
+          setDetector(newDetector);
+          console.log('✅ Pose detector loaded');
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (videoRef.current) {
-        (videoRef.current as HTMLVideoElement).srcObject = stream;
-        (videoRef.current as HTMLVideoElement).onloadedmetadata = () => {
-          (videoRef.current as HTMLVideoElement).play();
-          setCameraReady(true);
-          console.log('✅ Camera stream initialized');
-        };
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          if (videoRef.current) {
+            (videoRef.current as HTMLVideoElement).srcObject = stream;
+            (videoRef.current as HTMLVideoElement).onloadedmetadata = () => {
+              (videoRef.current as HTMLVideoElement).play();
+              setCameraReady(true);
+              console.log('✅ Camera stream initialized');
+            };
+          }
+        }
+      } catch (error) {
+        console.error('Failed to initialize TensorFlow.js:', error);
       }
     };
 
@@ -62,12 +71,16 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
         detector &&
         cameraReady
       ) {
-        const poses = await detector.estimatePoses(videoRef.current);
-        if (poses.length > 0) {
-          setPoses(poses);
-          onPoseDetected?.(poses[0]);
-          onCaptureFrame(poses[0].keypoints);
-          console.log('🧠 Keypoints:', poses[0].keypoints);
+        try {
+          const poses = await detector.estimatePoses(videoRef.current);
+          if (poses.length > 0) {
+            setPoses(poses);
+            onPoseDetected?.(poses[0]);
+            onCaptureFrame(poses[0].keypoints);
+            console.log('🧠 Keypoints:', poses[0].keypoints);
+          }
+        } catch (error) {
+          console.error('Pose detection error:', error);
         }
       }
       rafId = requestAnimationFrame(detectPose);

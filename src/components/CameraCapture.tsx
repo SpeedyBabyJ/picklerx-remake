@@ -6,13 +6,26 @@ import PoseOverlay from './PoseOverlay';
 
 interface CameraCaptureProps {
   onPoseDetected?: (pose: any) => void;
+  assessmentPhase: string;
+  onSquatComplete: () => void;
+  onCaptureFrame: (keypoints: any) => void;
 }
 
-const CameraCapture: React.FC<CameraCaptureProps> = ({ onPoseDetected }) => {
+const CameraCapture: React.FC<CameraCaptureProps> = ({ 
+  onPoseDetected, 
+  assessmentPhase, 
+  onSquatComplete, 
+  onCaptureFrame 
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [detector, setDetector] = useState<posedetection.PoseDetector | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [poses, setPoses] = useState<any[]>([]);
+
+  // Log assessment phase for debugging
+  useEffect(() => {
+    console.log("🌀 Phase:", assessmentPhase);
+  }, [assessmentPhase]);
 
   useEffect(() => {
     const init = async () => {
@@ -51,6 +64,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onPoseDetected }) => {
         if (poses.length > 0) {
           setPoses(poses);
           onPoseDetected?.(poses[0]);
+          onCaptureFrame(poses[0].keypoints);
           console.log('🧠 Keypoints:', poses[0].keypoints);
         }
       }
@@ -59,7 +73,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({ onPoseDetected }) => {
 
     detectPose();
     return () => cancelAnimationFrame(rafId);
-  }, [cameraReady, detector, onPoseDetected]);
+  }, [cameraReady, detector, onPoseDetected, onCaptureFrame]);
 
   return (
     <div style={{ position: 'relative', width: 640, height: 480 }}>

@@ -55,8 +55,8 @@ export default function PoseOverlay({ keypoints }: PoseOverlayProps) {
 
     // Draw skeleton lines
     SKELETON_CONNECTIONS.forEach(([p1, p2]) => {
-      const kp1 = keypoints.find(k => k.name === p1);
-      const kp2 = keypoints.find(k => k.name === p2);
+      const kp1 = keypoints.find((k: Keypoint) => k.name === p1);
+      const kp2 = keypoints.find((k: Keypoint) => k.name === p2);
       if (kp1 && kp2 && kp1.score > 0.4 && kp2.score > 0.4) {
         const pt1 = scaleKeypoints(kp1, canvas);
         const pt2 = scaleKeypoints(kp2, canvas);

@@ -166,7 +166,7 @@ const OverheadSquatAssessment: React.FC<OverheadSquatAssessmentProps> = ({
                   onSquatComplete={() => setSquatCount(prev => prev + 1)}
                   onCaptureFrame={(keypoints) => {
                     // Calculate knee angle from keypoints
-                    const findKeypoint = (name: string) => keypoints.find(kp => kp.name === name);
+                    const findKeypoint = (name: string) => keypoints.find((kp: any) => kp.name === name);
                     const leftAnkle = findKeypoint('left_ankle');
                     const leftKnee = findKeypoint('left_knee');
                     const leftHip = findKeypoint('left_hip');

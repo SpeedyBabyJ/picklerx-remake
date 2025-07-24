@@ -1,17 +1,18 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import CameraCapture from './CameraCapture';
 import PoseOverlay from './PoseOverlay';
 import ResultsScreen from './ResultsScreen';
 import { calculateMetrics } from '../utils/metricsUtils';
 
 const PHASES = {
   IDLE: 'idle',
-  COUNTDOWN_FRONT: 'countdownFront',
-  RECORD_FRONT: 'recordFront',
+  COUNTDOWN: 'countdown',
+  RECORD: 'record',
   TURN: 'turn',
-  COUNTDOWN_SIDE: 'countdownSide',
-  RECORD_SIDE: 'recordSide',
+  SIDE_COUNTDOWN: 'side_countdown',
+  SIDE_RECORD: 'side_record',
   RESULTS: 'results',
 };
 
@@ -23,18 +24,18 @@ const VIDEO_WIDTH = 640;
 const VIDEO_HEIGHT = 480;
 
 export default function ClientOnlyAssessment() {
-  const [poseDetection, setPoseDetection] = useState<any>(null);
-  const [detector, setDetector] = useState<any>(null);
   const [phase, setPhase] = useState(PHASES.IDLE);
   const [countdown, setCountdown] = useState(3);
+  const [recordingStarted, setRecordingStarted] = useState(false);
+  const [detector, setDetector] = useState<any>(null);
+  const [poseDetection, setPoseDetection] = useState<any>(null);
   const [keypoints, setKeypoints] = useState<any[]>([]);
-  const [frontFrames, setFrontFrames] = useState<any[]>([]);
-  const [sideFrames, setSideFrames] = useState<any[]>([]);
+  const [squatCount, setSquatCount] = useState(0);
   const [results, setResults] = useState<any>(null);
-  const [cameraReady, setCameraReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const requestRef = useRef<number>();
-  const [squatCount, setSquatCount] = useState(0);
+  const [frontFrames, setFrontFrames] = useState<any[]>([]);
+  const [sideFrames, setSideFrames] = useState<any[]>([]);
   const SQUAT_TARGET = 3;
 
   // Camera initialization: request camera when assessment starts
@@ -55,14 +56,9 @@ export default function ClientOnlyAssessment() {
     }
   }, [phase]);
 
-  // Set cameraReady only after video is actually playing
-  const handleCameraReady = () => {
-    setCameraReady(true);
-  };
-
   // Load pose detection model after camera is ready
   useEffect(() => {
-    if (!cameraReady) return;
+    if (!recordingStarted) return;
     import('@tensorflow-models/pose-detection').then(async (mod) => {
       setPoseDetection(mod);
       const detector = await mod.createDetector(mod.SupportedModels.MoveNet, {
@@ -71,17 +67,19 @@ export default function ClientOnlyAssessment() {
       setDetector(detector);
       console.log("🧠 Pose detector initialized:", detector);
     });
-  }, [cameraReady]);
+  }, [recordingStarted]);
 
   // Countdown logic
   useEffect(() => {
-    if (phase === PHASES.COUNTDOWN_FRONT || phase === PHASES.COUNTDOWN_SIDE) {
+    if (phase === PHASES.COUNTDOWN || phase === PHASES.SIDE_COUNTDOWN) {
       setCountdown(3);
       const timer = setInterval(() => {
         setCountdown((c) => {
           if (c <= 1) {
             clearInterval(timer);
-            setPhase(phase === PHASES.COUNTDOWN_FRONT ? PHASES.RECORD_FRONT : PHASES.RECORD_SIDE);
+            setRecordingStarted(true);
+            setPhase(phase === PHASES.COUNTDOWN ? PHASES.RECORD : PHASES.SIDE_RECORD);
+            console.log('🟢 Recording started');
             return 3;
           }
           return c - 1;
@@ -91,9 +89,16 @@ export default function ClientOnlyAssessment() {
     }
   }, [phase]);
 
+  // Debug logs for readiness
+  useEffect(() => {
+    console.log('🎥 video loaded?', videoRef.current?.readyState);
+    console.log('🤖 detector initialized?', !!detector);
+    console.log('🔁 Detection Started:', recordingStarted);
+  }, [videoRef.current, detector, recordingStarted]);
+
   // Pose detection and frame capture (only when cameraReady and detector are true)
   useEffect(() => {
-    if (!detector || !cameraReady || phase === PHASES.IDLE) return;
+    if (!detector || !recordingStarted || phase === PHASES.IDLE) return;
     let lastSquatPhase = 'standing';
     let squatCounter = 0;
     let squatStartTime: number | null = null;
@@ -103,7 +108,7 @@ export default function ClientOnlyAssessment() {
         videoRef.current &&
         videoRef.current.readyState === 4 &&
         detector &&
-        cameraReady
+        recordingStarted
       ) {
         const poses = await detector.estimatePoses(videoRef.current);
         if (poses.length > 0 && poses[0].keypoints) {
@@ -117,9 +122,8 @@ export default function ClientOnlyAssessment() {
           }));
           setKeypoints(scaledKeypoints);
           // Only record during recording phases
-          if (phase === PHASES.RECORD_FRONT || phase === PHASES.RECORD_SIDE) {
-            if (phase === PHASES.RECORD_FRONT) setFrontFrames((prev) => [...prev, scaledKeypoints]);
-            if (phase === PHASES.RECORD_SIDE) setSideFrames((prev) => [...prev, scaledKeypoints]);
+          if (phase === PHASES.RECORD) {
+            setFrontFrames((prev) => [...prev, scaledKeypoints]);
 
             // Squat detection (simple: knee y below hip y)
             const leftKnee = scaledKeypoints.find((kp: any) => kp.name === 'left_knee');
@@ -140,8 +144,8 @@ export default function ClientOnlyAssessment() {
               }
               // End phase after SQUAT_TARGET squats
               if (squatCounter >= SQUAT_TARGET) {
-                if (phase === PHASES.RECORD_FRONT) setPhase(PHASES.TURN);
-                if (phase === PHASES.RECORD_SIDE) {
+                setPhase(PHASES.TURN);
+                if (phase === PHASES.SIDE_RECORD) {
                   // Calculate results
                   const metrics = calculateMetrics(frontFrames, sideFrames);
                   setResults(metrics);
@@ -156,7 +160,7 @@ export default function ClientOnlyAssessment() {
     };
     detect();
     return () => cancelAnimationFrame(requestRef.current!);
-  }, [detector, cameraReady, phase]);
+  }, [detector, recordingStarted, phase]);
 
   // Reset for retake
   const handleRetake = () => {
@@ -165,7 +169,7 @@ export default function ClientOnlyAssessment() {
     setSideFrames([]);
     setResults(null);
     setSquatCount(0);
-    setCameraReady(false);
+    setRecordingStarted(false);
   };
 
   // UI rendering
@@ -179,9 +183,9 @@ export default function ClientOnlyAssessment() {
       {/* Main content */}
       <div style={{ position: 'relative', width: 640, height: 480 }}>
         {phase === PHASES.IDLE && (
-          <button onClick={() => setPhase(PHASES.COUNTDOWN_FRONT)} style={{ position: 'absolute', zIndex: 2, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', background: BRAND_GREEN, color: BRAND_DARK, fontWeight: 700, fontSize: 28, padding: '18px 48px', border: 'none', borderRadius: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', cursor: 'pointer', letterSpacing: 1 }}>Start Assessment</button>
+          <button onClick={() => setPhase(PHASES.COUNTDOWN)} style={{ position: 'absolute', zIndex: 2, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', background: BRAND_GREEN, color: BRAND_DARK, fontWeight: 700, fontSize: 28, padding: '18px 48px', border: 'none', borderRadius: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', cursor: 'pointer', letterSpacing: 1 }}>Start Assessment</button>
         )}
-        {(phase === PHASES.COUNTDOWN_FRONT || phase === PHASES.COUNTDOWN_SIDE) && (
+        {(phase === PHASES.COUNTDOWN || phase === PHASES.SIDE_COUNTDOWN) && (
           <div style={{ position: 'absolute', zIndex: 2, left: 0, top: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: BRAND_GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 96, fontWeight: 800, letterSpacing: 2, borderRadius: 20, textShadow: '0 2px 8px #000' }}>
             {countdown}
           </div>
@@ -189,10 +193,10 @@ export default function ClientOnlyAssessment() {
         {phase === PHASES.TURN && (
           <div style={{ position: 'absolute', zIndex: 2, left: 0, top: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, flexDirection: 'column', borderRadius: 20, textAlign: 'center' }}>
             <div style={{ fontWeight: 700, fontSize: 36, marginBottom: 16, color: BRAND_GREEN }}>Turn to your right for the side view</div>
-            <button onClick={() => setPhase(PHASES.COUNTDOWN_SIDE)} style={{ marginTop: 24, fontSize: 24, background: BRAND_GREEN, color: BRAND_DARK, fontWeight: 700, padding: '12px 36px', border: 'none', borderRadius: 12, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>Ready</button>
+            <button onClick={() => setPhase(PHASES.SIDE_COUNTDOWN)} style={{ marginTop: 24, fontSize: 24, background: BRAND_GREEN, color: BRAND_DARK, fontWeight: 700, padding: '12px 36px', border: 'none', borderRadius: 12, cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>Ready</button>
           </div>
         )}
-        {phase !== PHASES.RESULTS && (
+        {phase === PHASES.RECORD && recordingStarted && (
           <>
             <video
               ref={videoRef}
@@ -204,15 +208,32 @@ export default function ClientOnlyAssessment() {
               onLoadedMetadata={() => {
                 videoRef.current?.play();
               }}
-              onCanPlay={handleCameraReady}
               style={{ position: 'absolute', top: 0, left: 0, width: VIDEO_WIDTH, height: VIDEO_HEIGHT, transform: 'scaleX(-1)', zIndex: 1, borderRadius: 20, boxShadow: '0 2px 8px #000' }}
             />
             <PoseOverlay keypoints={keypoints} />
-            {(phase === PHASES.RECORD_FRONT || phase === PHASES.RECORD_SIDE) && (
-              <div style={{ position: 'absolute', zIndex: 2, right: 24, top: 24, background: 'rgba(12,20,40,0.85)', color: BRAND_GREEN, padding: '16px 32px', borderRadius: 12, fontSize: 24, fontWeight: 700, letterSpacing: 1, boxShadow: '0 2px 8px #000' }}>
-                {phase === PHASES.RECORD_FRONT ? `Front View: Squats ${squatCount}/${SQUAT_TARGET}` : `Side View: Squats ${squatCount}/${SQUAT_TARGET}`}
-              </div>
-            )}
+            <div style={{ position: 'absolute', zIndex: 2, right: 24, top: 24, background: 'rgba(12,20,40,0.85)', color: BRAND_GREEN, padding: '16px 32px', borderRadius: 12, fontSize: 24, fontWeight: 700, letterSpacing: 1, boxShadow: '0 2px 8px #000' }}>
+              Front View: Squats {squatCount}/{SQUAT_TARGET}
+            </div>
+          </>
+        )}
+        {phase === PHASES.SIDE_RECORD && recordingStarted && (
+          <>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              width={VIDEO_WIDTH}
+              height={VIDEO_HEIGHT}
+              onLoadedMetadata={() => {
+                videoRef.current?.play();
+              }}
+              style={{ position: 'absolute', top: 0, left: 0, width: VIDEO_WIDTH, height: VIDEO_HEIGHT, transform: 'scaleX(-1)', zIndex: 1, borderRadius: 20, boxShadow: '0 2px 8px #000' }}
+            />
+            <PoseOverlay keypoints={keypoints} />
+            <div style={{ position: 'absolute', zIndex: 2, right: 24, top: 24, background: 'rgba(12,20,40,0.85)', color: BRAND_GREEN, padding: '16px 32px', borderRadius: 12, fontSize: 24, fontWeight: 700, letterSpacing: 1, boxShadow: '0 2px 8px #000' }}>
+              Side View: Squats {squatCount}/{SQUAT_TARGET}
+            </div>
           </>
         )}
         {phase === PHASES.RESULTS && results && (

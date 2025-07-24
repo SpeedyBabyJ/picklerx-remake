@@ -1,18 +1,6 @@
-export type PoseFrame = {
-  x: number;
-  y: number;
-  score: number;
-  name: string;
-}[];
+import { Keypoint, PoseFrame, MetricsOutput } from '../types';
 
-export interface MetricsOutput {
-  mobility: number;
-  compensation: number;
-  symmetry: number;
-  injuryRisk: number | null;
-  tier: "Elite" | "Pro" | "Amateur" | "Incomplete";
-  flags: string[];
-}
+export type { Keypoint, PoseFrame, MetricsOutput };
 
 const riskLibrary = {
   "Knee Valgus": { threshold: 10, explanation: "Weak hip external rotators, knees tracking inward." },
@@ -101,32 +89,32 @@ const incrementFlag = (counts: Record<string, number>, flag: string) => {
 
 // Example simple joint diff — for real app use proper angle calcs
 const calculateLeftRightAngleDifference = (frame: PoseFrame, left: string, right: string): number => {
-  const leftPoint = frame.find((kp: any) => kp.name === left);
-  const rightPoint = frame.find((kp: any) => kp.name === right);
+  const leftPoint = frame.find((kp: Keypoint) => kp.name === left);
+  const rightPoint = frame.find((kp: Keypoint) => kp.name === right);
   if (!leftPoint || !rightPoint) return 0;
   return Math.abs(leftPoint.y - rightPoint.y);
 };
 
 const calculateTrunkLean = (frame: PoseFrame): number => {
-  const shoulder = frame.find((kp: any) => kp.name === 'left_shoulder') || frame.find((kp: any) => kp.name === 'right_shoulder');
-  const hip = frame.find((kp: any) => kp.name === 'left_hip') || frame.find((kp: any) => kp.name === 'right_hip');
+  const shoulder = frame.find((kp: Keypoint) => kp.name === 'left_shoulder') || frame.find((kp: Keypoint) => kp.name === 'right_shoulder');
+  const hip = frame.find((kp: Keypoint) => kp.name === 'left_hip') || frame.find((kp: Keypoint) => kp.name === 'right_hip');
   if (!shoulder || !hip) return 0;
   const angle = Math.atan2(shoulder.y - hip.y, shoulder.x - hip.x) * (180 / Math.PI);
   return Math.abs(angle);
 };
 
 const calculateArmsDrop = (frame: PoseFrame): number => {
-  const shoulder = frame.find((kp: any) => kp.name === 'left_shoulder') || frame.find((kp: any) => kp.name === 'right_shoulder');
-  const wrist = frame.find((kp: any) => kp.name === 'left_wrist') || frame.find((kp: any) => kp.name === 'right_wrist');
+  const shoulder = frame.find((kp: Keypoint) => kp.name === 'left_shoulder') || frame.find((kp: Keypoint) => kp.name === 'right_shoulder');
+  const wrist = frame.find((kp: Keypoint) => kp.name === 'left_wrist') || frame.find((kp: Keypoint) => kp.name === 'right_wrist');
   if (!shoulder || !wrist) return 0;
   const angle = Math.atan2(shoulder.y - wrist.y, shoulder.x - wrist.x) * (180 / Math.PI);
   return Math.abs(angle);
 };
 
 const detectKneeValgus = (frame: PoseFrame, threshold: number): boolean => {
-  const knee = frame.find((kp: any) => kp.name === 'left_knee') || frame.find((kp: any) => kp.name === 'right_knee');
-  const ankle = frame.find((kp: any) => kp.name === 'left_ankle') || frame.find((kp: any) => kp.name === 'right_ankle');
-  const hip = frame.find((kp: any) => kp.name === 'left_hip') || frame.find((kp: any) => kp.name === 'right_hip');
+  const knee = frame.find((kp: Keypoint) => kp.name === 'left_knee') || frame.find((kp: Keypoint) => kp.name === 'right_knee');
+  const ankle = frame.find((kp: Keypoint) => kp.name === 'left_ankle') || frame.find((kp: Keypoint) => kp.name === 'right_ankle');
+  const hip = frame.find((kp: Keypoint) => kp.name === 'left_hip') || frame.find((kp: Keypoint) => kp.name === 'right_hip');
   if (!knee || !ankle || !hip) return false;
 
   const upperAngle = Math.atan2(hip.y - knee.y, hip.x - knee.x);
@@ -139,7 +127,7 @@ const detectKneeValgus = (frame: PoseFrame, threshold: number): boolean => {
 };
 
 const detectHeelLift = (frame: PoseFrame, threshold: number): boolean => {
-  const ankle = frame.find((kp: any) => kp.name === 'left_ankle') || frame.find((kp: any) => kp.name === 'right_ankle');
+  const ankle = frame.find((kp: Keypoint) => kp.name === 'left_ankle') || frame.find((kp: Keypoint) => kp.name === 'right_ankle');
   if (!ankle) return false;
   return ankle.y < threshold;
 }; 

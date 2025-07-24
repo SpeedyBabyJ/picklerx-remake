@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
+import { Keypoint } from '../types';
 
 const SKELETON_CONNECTIONS = [
   ["left_shoulder", "right_shoulder"],
@@ -19,13 +20,6 @@ const SKELETON_CONNECTIONS = [
   ["left_ankle", "left_knee"],
   ["right_ankle", "right_knee"],
 ];
-
-interface Keypoint {
-  x: number;
-  y: number;
-  score: number;
-  name?: string;
-}
 
 interface PoseOverlayProps {
   keypoints: Keypoint[];

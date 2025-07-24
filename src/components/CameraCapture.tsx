@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import PoseOverlay from './PoseOverlay';
+import { safeImportTensorFlow } from '../utils/tensorflow-safe';
 
 type AssessmentPhase = 'idle' | 'countdown' | 'recordFront' | 'pause' | 'recordSide' | 'computing' | 'complete';
 
@@ -31,12 +32,14 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
       try {
         // Only initialize TensorFlow.js in browser environment
         if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
-          // Dynamic imports to prevent SSR issues
-          const tf = await import('@tensorflow/tfjs');
-          const posedetection = await import('@tensorflow-models/pose-detection');
-          await import('@tensorflow/tfjs-backend-webgl');
+          // Use safe TensorFlow.js import
+          const { tf, posedetection } = await safeImportTensorFlow();
           
-          await tf.ready();
+          if (!tf || !posedetection) {
+            console.error('TensorFlow.js not available');
+            return;
+          }
+
           const model = posedetection.SupportedModels.MoveNet;
           const detectorConfig = { modelType: posedetection.movenet.modelType.SINGLEPOSE_LIGHTNING };
           const newDetector = await posedetection.createDetector(model, detectorConfig);

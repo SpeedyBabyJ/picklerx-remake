@@ -16,6 +16,9 @@ const nextConfig = {
       });
     }
     
+    // Prevent environment flag evaluation during build
+    config.plugins = config.plugins || [];
+    
     return config;
   },
   // Ensure proper static generation
@@ -23,6 +26,24 @@ const nextConfig = {
   // Disable static optimization for pages that use TensorFlow.js
   experimental: {
     esmExternals: 'loose',
+  },
+  // Environment variables that are safe to expose
+  env: {
+    NEXT_PUBLIC_DEBUG: process.env.NEXT_PUBLIC_DEBUG || 'false',
+  },
+  // Disable automatic static optimization for assessment page
+  async headers() {
+    return [
+      {
+        source: '/assessment',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate',
+          },
+        ],
+      },
+    ];
   },
 };
 

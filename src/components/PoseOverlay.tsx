@@ -21,31 +21,42 @@ const SKELETON_CONNECTIONS = [
 interface PoseOverlayProps {
   keypoints: Keypoint[];
   videoRef?: React.RefObject<HTMLVideoElement>;
+  scaleX?: number;
+  scaleY?: number;
 }
 
-export default function PoseOverlay({ keypoints, videoRef }: PoseOverlayProps) {
+export default function PoseOverlay({ keypoints, videoRef, scaleX = 1, scaleY = 1 }: PoseOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Helper to scale keypoints if normalized
+  // Helper to scale keypoints with proper scaling factors
   const scaleKeypoints = (kp: Keypoint, canvas: HTMLCanvasElement) => {
+    let x = kp.x;
+    let y = kp.y;
+    
+    // If normalized coordinates (0-1), scale to canvas size
     if (kp.x <= 1 && kp.y <= 1) {
-      return {
-        x: kp.x * canvas.width,
-        y: kp.y * canvas.height,
-      };
+      x = kp.x * canvas.width;
+      y = kp.y * canvas.height;
     }
-    return { x: kp.x, y: kp.y };
+    
+    // Apply display scaling factors
+    return {
+      x: x * scaleX,
+      y: y * scaleY,
+    };
   };
 
-  // Sync canvas size to video and mirror overlay
+  // Sync canvas size to video and set dimensions once
   useEffect(() => {
     const canvas = canvasRef.current;
     const video = videoRef?.current;
     if (!canvas || !video) return;
+    
     const setCanvasSize = () => {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
     };
+    
     setCanvasSize();
     video.addEventListener('loadedmetadata', setCanvasSize);
     return () => video.removeEventListener('loadedmetadata', setCanvasSize);
@@ -56,6 +67,7 @@ export default function PoseOverlay({ keypoints, videoRef }: PoseOverlayProps) {
     if (!canvas || !keypoints || keypoints.length === 0) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Mirror overlay to match webcam
@@ -91,14 +103,17 @@ export default function PoseOverlay({ keypoints, videoRef }: PoseOverlayProps) {
         ctx.arc(x, y, 6, 0, 2 * Math.PI);
         ctx.fillStyle = 'lime';
         ctx.fill();
+        
+        // Optional: Show confidence percentage
         const confidence = Math.round(kp.score * 100);
         ctx.fillStyle = 'white';
         ctx.font = '10px monospace';
         ctx.fillText(`${confidence}%`, x + 8, y - 8);
       }
     });
+    
     ctx.restore();
-  }, [keypoints, videoRef]);
+  }, [keypoints, videoRef, scaleX, scaleY]);
 
   return (
     <canvas

@@ -1,29 +1,17 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { safeImportTensorFlow } from '../utils/tensorflow-safe';
-import { Keypoint } from '../types';
-import KalmanFilter from '../utils/KalmanFilter';
+"use client";
+import React, { useRef, useEffect, useState } from "react";
+import { safeImportTensorFlow } from "../utils/tensorflow-safe";
+import { Keypoint } from "../types";
+import KalmanFilter from "../utils/KalmanFilter";
 
-// --- Styles ---
-const containerStyle: React.CSSProperties = {
-  position: 'relative',
-  width: '100vw',
-  aspectRatio: '16/9',
-  height: 'auto',
-  overflow: 'hidden',
-  background: 'black',
-};
-const videoCanvasStyle: React.CSSProperties = {
-  width: '100%',
-  height: 'auto',
-  maxWidth: '100vw',
-  objectFit: 'contain',
-  position: 'absolute',
-  top: 0,
-  left: 0,
-};
-
-// --- Component ---
-type AssessmentPhase = 'idle' | 'countdown' | 'recordFront' | 'pause' | 'recordSide' | 'computing' | 'complete';
+type AssessmentPhase =
+  | "idle"
+  | "countdown"
+  | "recordFront"
+  | "pause"
+  | "recordSide"
+  | "computing"
+  | "complete";
 
 interface CameraCaptureProps {
   onPoseDetected?: (pose: any) => void;
@@ -32,217 +20,216 @@ interface CameraCaptureProps {
   onCaptureFrame: (keypoints: any) => void;
 }
 
-const DETECTION_INTERVAL = 1000 / 12; // 12 FPS
+const DETECTION_INTERVAL = 1000 / 12; // Pose detection at 12 FPS
+const BOTTOM_DWELL_TIME = 250; // Must stay in bottom 30% for 250ms to count as bottom
 
-const CameraCapture: React.FC<CameraCaptureProps> = ({ 
-  onPoseDetected, 
-  assessmentPhase, 
-  onSquatComplete, 
-  onCaptureFrame 
+const CameraCapture: React.FC<CameraCaptureProps> = ({
+  onPoseDetected,
+  assessmentPhase,
+  onSquatComplete,
+  onCaptureFrame,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [detector, setDetector] = useState<any>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [isClient, setIsClient] = useState(false);
+
   const repCount = useRef(0);
   const inBottomPosition = useRef(false);
+  const bottomEnteredAt = useRef<number | null>(null);
   const lastDetectionTime = useRef(0);
   const kalmanFilters = useRef<{ [name: string]: KalmanFilter }>({});
 
-  useEffect(() => { setIsClient(true); }, []);
+  useEffect(() => setIsClient(true), []);
 
-  // Camera and detector setup
+  /** 🎥 Initialize camera and pose detector */
   useEffect(() => {
-    const loadDetector = async () => {
+    const init = async () => {
+      if (!isClient) return;
       try {
-        if (!isClient) return;
         const { tf, posedetection } = await safeImportTensorFlow();
         if (!tf || !posedetection) return;
-        const model = posedetection.SupportedModels.MoveNet;
-        const detectorConfig = { modelType: posedetection.movenet.modelType.SINGLEPOSE_LIGHTNING };
-        const newDetector = await posedetection.createDetector(model, detectorConfig);
+
+        const detectorConfig = {
+          modelType: posedetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+        };
+        const newDetector = await posedetection.createDetector(
+          posedetection.SupportedModels.MoveNet,
+          detectorConfig
+        );
         setDetector(newDetector);
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: 'user' } });
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 1280, height: 720, facingMode: "user" },
+        });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.onloadedmetadata = () => {
-            const video = videoRef.current!;
-            const canvas = canvasRef.current!;
-            video.width = video.videoWidth;
-            video.height = video.videoHeight;
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            video.play();
+            videoRef.current!.play();
             setCameraReady(true);
           };
         }
-      } catch (error) {
-        console.error('❌ Failed to initialize:', error);
+      } catch (err) {
+        console.error("❌ Camera/Detector init failed:", err);
       }
     };
-    loadDetector();
+    init();
   }, [isClient]);
 
-  // Rep detection and pose loop
-  useEffect(() => {
-    let rafId: number;
-    let REP_THRESHOLD_BOTTOM = 0;
-    let REP_THRESHOLD_TOP = 0;
+  /** 🦵 Rep counting logic */
+  const getAverageHipY = (keypoints: Keypoint[]) => {
+    const leftHip = keypoints.find((k) => k.name === "left_hip")?.y ?? 0;
+    const rightHip = keypoints.find((k) => k.name === "right_hip")?.y ?? 0;
+    return (leftHip + rightHip) / 2;
+  };
 
-    const getAverageHipY = (keypoints: Keypoint[]) => {
-      const leftHip = keypoints.find(kp => kp.name === 'left_hip')?.y ?? 0;
-      const rightHip = keypoints.find(kp => kp.name === 'right_hip')?.y ?? 0;
-      return (leftHip + rightHip) / 2;
-    };
-    const applyKalmanFilter = (keypoints: Keypoint[]): Keypoint[] => {
-      return keypoints.map(kp => {
-        if (!kalmanFilters.current[kp.name]) {
-          kalmanFilters.current[kp.name] = new KalmanFilter();
-        }
-        return {
-          ...kp,
-          x: kalmanFilters.current[kp.name].filter(kp.x),
-          y: kalmanFilters.current[kp.name].filter(kp.y),
-        };
-      });
-    };
-    const drawSkeleton = (keypoints: Keypoint[], ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
-      if (!keypoints || keypoints.length < 10) {
-        console.warn('No keypoints detected');
+  /** 🔄 Apply Kalman filter for smoother keypoints */
+  const applyKalmanFilter = (keypoints: Keypoint[]) =>
+    keypoints.map((kp) => {
+      if (!kalmanFilters.current[kp.name])
+        kalmanFilters.current[kp.name] = new KalmanFilter();
+      return {
+        ...kp,
+        x: kalmanFilters.current[kp.name].filter(kp.x),
+        y: kalmanFilters.current[kp.name].filter(kp.y),
+      };
+    });
+
+  /** 🖌️ Draw skeleton overlay */
+  const drawSkeleton = (
+    keypoints: Keypoint[],
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement
+  ) => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(canvas.width, 0); // Flip horizontally
+    ctx.scale(-1, 1);
+
+    const pairs: [string, string][] = [
+      ["left_shoulder", "right_shoulder"],
+      ["left_shoulder", "left_elbow"],
+      ["left_elbow", "left_wrist"],
+      ["right_shoulder", "right_elbow"],
+      ["right_elbow", "right_wrist"],
+      ["left_hip", "right_hip"],
+      ["left_shoulder", "left_hip"],
+      ["right_shoulder", "right_hip"],
+      ["left_hip", "left_knee"],
+      ["left_knee", "left_ankle"],
+      ["right_hip", "right_knee"],
+      ["right_knee", "right_ankle"],
+    ];
+
+    ctx.strokeStyle = "lime";
+    ctx.lineWidth = 3;
+
+    pairs.forEach(([a, b]) => {
+      const kp1 = keypoints.find((k) => k.name === a && k.score > 0.4);
+      const kp2 = keypoints.find((k) => k.name === b && k.score > 0.4);
+      if (kp1 && kp2) {
+        ctx.beginPath();
+        ctx.moveTo(kp1.x, kp1.y);
+        ctx.lineTo(kp2.x, kp2.y);
+        ctx.stroke();
+      }
+    });
+
+    keypoints.forEach((kp) => {
+      if (kp.score > 0.4) {
+        ctx.beginPath();
+        ctx.arc(kp.x, kp.y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = "lime";
+        ctx.fill();
+      }
+    });
+
+    ctx.restore();
+  };
+
+  /** 🔍 Pose detection loop */
+  useEffect(() => {
+    if (!detector || !cameraReady || !isClient) return;
+    const video = videoRef.current!;
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext("2d")!;
+
+    const detect = async () => {
+      if (!video.readyState || video.readyState < 2) {
+        requestAnimationFrame(detect);
         return;
       }
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.save();
-      ctx.scale(-1, 1);
-      ctx.translate(-canvas.width, 0);
-      // Draw lines and points (same as PoseOverlay)
-      const SKELETON_CONNECTIONS = [
-        ["left_shoulder", "right_shoulder"],
-        ["left_shoulder", "left_elbow"],
-        ["left_elbow", "left_wrist"],
-        ["right_shoulder", "right_elbow"],
-        ["right_elbow", "right_wrist"],
-        ["left_hip", "right_hip"],
-        ["left_shoulder", "left_hip"],
-        ["right_shoulder", "right_hip"],
-        ["left_hip", "left_knee"],
-        ["left_knee", "left_ankle"],
-        ["right_hip", "right_knee"],
-        ["right_knee", "right_ankle"],
-      ];
-      SKELETON_CONNECTIONS.forEach(([p1, p2]) => {
-        const kp1 = keypoints.find((k: Keypoint) => k.name === p1);
-        const kp2 = keypoints.find((k: Keypoint) => k.name === p2);
-        if (kp1 && kp2 && kp1.score > 0.4 && kp2.score > 0.4) {
-          ctx.beginPath();
-          ctx.moveTo(kp1.x, kp1.y);
-          ctx.lineTo(kp2.x, kp2.y);
-          ctx.strokeStyle = 'lime';
-          ctx.lineWidth = 3;
-          ctx.stroke();
-        }
-      });
-      keypoints.forEach((kp) => {
-        if (kp.score > 0.4) {
-          ctx.beginPath();
-          ctx.arc(kp.x, kp.y, 6, 0, 2 * Math.PI);
-          ctx.fillStyle = 'lime';
-          ctx.fill();
-        }
-      });
-      ctx.restore();
-    };
-    const detectPose = async () => {
-      try {
-        if (
-          videoRef.current &&
-          videoRef.current.readyState === 4 &&
-          detector &&
-          cameraReady &&
-          isClient &&
-          canvasRef.current
-        ) {
-          const video = videoRef.current;
-          const canvas = canvasRef.current;
-          video.width = video.videoWidth;
-          video.height = video.videoHeight;
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          REP_THRESHOLD_BOTTOM = canvas.height * 0.7;
-          REP_THRESHOLD_TOP = canvas.height * 0.4;
-          const now = Date.now();
-          if (now - lastDetectionTime.current < DETECTION_INTERVAL) {
-            rafId = requestAnimationFrame(detectPose);
-            return;
-          }
-          lastDetectionTime.current = now;
-          const poses = await detector.estimatePoses(video);
-          if (poses.length > 0 && poses[0].keypoints) {
-            let keypoints: Keypoint[] = poses[0].keypoints;
-            keypoints = applyKalmanFilter(keypoints);
-            drawSkeleton(keypoints, canvas.getContext('2d')!, canvas);
-            // Rep detection
-            const hipY = getAverageHipY(keypoints);
-            const leftHip = keypoints.find(kp => kp.name === 'left_hip');
-            const rightHip = keypoints.find(kp => kp.name === 'right_hip');
-            const minConfidence = Math.min(leftHip?.score ?? 0, rightHip?.score ?? 0);
-            if (!inBottomPosition.current && hipY > REP_THRESHOLD_BOTTOM && minConfidence > 0.4) {
-              inBottomPosition.current = true;
-            }
-            if (inBottomPosition.current && hipY < REP_THRESHOLD_TOP && minConfidence > 0.4) {
-              repCount.current++;
-              inBottomPosition.current = false;
-              onSquatComplete();
-            }
-            // Logging
-            if (repCount.current % 1 === 0) {
-              console.log({
-                hipY: hipY.toFixed(1),
-                inBottomPosition: inBottomPosition.current,
-                repCount: repCount.current,
-                minConfidence: minConfidence.toFixed(2),
-                canvasH: canvas.height,
-                bottom: REP_THRESHOLD_BOTTOM,
-                top: REP_THRESHOLD_TOP
-              });
-            }
-          }
-        }
-      } catch (error) {
-        console.error('❌ Pose detection error:', error);
-      }
-      rafId = requestAnimationFrame(detectPose);
-    };
-    if (detector && cameraReady && isClient) {
-      detectPose();
-    }
-    return () => {
-      if (rafId) cancelAnimationFrame(rafId);
-    };
-  }, [detector, cameraReady, isClient, onPoseDetected, onCaptureFrame, onSquatComplete]);
 
-  if (!isClient) {
-    return <div>Loading...</div>;
-  }
+      // Match canvas size to actual video dimensions
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const now = Date.now();
+      if (now - lastDetectionTime.current >= DETECTION_INTERVAL) {
+        lastDetectionTime.current = now;
+
+        const poses = await detector.estimatePoses(video);
+        if (poses[0]?.keypoints) {
+          let keypoints = applyKalmanFilter(poses[0].keypoints);
+          drawSkeleton(keypoints, ctx, canvas);
+
+          // REP LOGIC
+          const hipY = getAverageHipY(keypoints);
+          const bottom = canvas.height * 0.7;
+          const top = canvas.height * 0.4;
+
+          if (hipY > bottom) {
+            if (!bottomEnteredAt.current) bottomEnteredAt.current = now;
+          } else {
+            bottomEnteredAt.current = null;
+          }
+
+          if (
+            bottomEnteredAt.current &&
+            now - bottomEnteredAt.current > BOTTOM_DWELL_TIME &&
+            hipY < top
+          ) {
+            repCount.current++;
+            onSquatComplete();
+            bottomEnteredAt.current = null;
+          }
+        }
+      }
+
+      requestAnimationFrame(detect);
+    };
+
+    detect();
+  }, [detector, cameraReady, isClient]);
 
   return (
-    <div style={containerStyle}>
-      <video ref={videoRef} autoPlay muted playsInline style={videoCanvasStyle} />
-      <canvas ref={canvasRef} style={videoCanvasStyle} />
-      <div style={{
-        position: 'absolute',
-        top: 10,
-        left: 10,
-        background: 'rgba(0,0,0,0.7)',
-        color: 'lime',
-        padding: '8px',
-        borderRadius: '4px',
-        fontSize: '12px',
-        fontFamily: 'monospace',
-        zIndex: 10
-      }}>
-        <div>Reps: {repCount.current}</div>
+    <div style={{ position: "relative", width: "100%", maxWidth: "100vw" }}>
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        style={{ width: "100%", height: "auto", transform: "scaleX(-1)" }}
+      />
+      <canvas
+        ref={canvasRef}
+        style={{ position: "absolute", top: 0, left: 0 }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: 10,
+          left: 10,
+          background: "rgba(0,0,0,0.6)",
+          color: "#0f0",
+          padding: "6px 10px",
+          borderRadius: "4px",
+          fontFamily: "monospace",
+          fontSize: 14,
+        }}
+      >
+        Reps: {repCount.current}
       </div>
     </div>
   );
